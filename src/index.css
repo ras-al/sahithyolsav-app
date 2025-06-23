@@ -1,3 +1,5 @@
+/* Path: index.css */
+
 /* General Body and Font Styles */
 body {
     margin: 0;
@@ -664,6 +666,73 @@ p {
     to { background-color: #ffe082; }
 }
 
+/* Message Box */
+.message-box {
+    padding: 12px 20px;
+    margin-bottom: 20px;
+    border-radius: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: bold;
+    border: 1px solid transparent;
+    font-size: 0.95em;
+}
+
+.message-box-info {
+    background-color: #e7f3ff;
+    color: #3498db;
+    border-color: #3498db;
+}
+
+.message-box-success {
+    background-color: #e6ffee;
+    color: #2ecc71;
+    border-color: #2ecc71;
+}
+
+.message-box-error {
+    background-color: #fbecec;
+    color: #e74c3c;
+    border-color: #e74c3c;
+}
+
+.message-box-close {
+    background: none;
+    border: none;
+    font-size: 1.2em;
+    cursor: pointer;
+    color: inherit;
+    font-weight: bold;
+    padding: 0 5px;
+}
+
+/* Loading Spinner */
+.loading-spinner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+    font-size: 1.2em;
+    color: #3498db;
+}
+
+.spinner {
+    border: 5px solid rgba(52, 152, 219, 0.3);
+    border-top: 5px solid #3498db;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    animation: spin 1s linear infinite;
+    margin-bottom: 10px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
 /* Modal Styling */
 .modal-overlay {
     position: fixed;
@@ -807,6 +876,7 @@ p {
 .home-section:hover {
     transform: translateY(-5px);
     box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    border-color: #3498db; /* Highlight border on hover */
 }
 
 .home-section h2 {
