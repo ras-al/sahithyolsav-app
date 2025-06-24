@@ -55,7 +55,7 @@ const HomePage = () => {
                         Join us on July 15th & 16th, 2025, in Iritty Division!
                     </p>
                     <div className="hero-buttons">
-                        <Link to="/results" className="btn btn-primary btn-large">View Schedule</Link>
+                        <Link to="/results" className="btn btn-primary btn-large">View Results</Link>
                         <Link to="/leaderboard" className="btn btn-secondary btn-large">See Leaderboard</Link>
                     </div>
                 </div>
