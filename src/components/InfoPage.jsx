@@ -53,7 +53,7 @@ const InfoPage = () => {
                 <ul>
                     <li><strong>Event Coordinators:</strong> coordinator@sahithyolsav.com</li>
                     <li><strong>Technical Support:</strong> support@sahithyolsav.com</li>
-                    <li><strong>Emergency Contact:</strong> +91 99999 88888</li>
+                    <li><strong>Emergency Contact:</strong> +91 XXXXXXXX</li>
                 </ul>
             </section>
         </div>

@@ -94,7 +94,7 @@ const HomePage = () => {
                     bigger and better, with a wide array of competitions and showcases designed to inspire and entertain.
                 </p>
                 <p>
-                    From captivating on-stage performances like dance and music to intricate off-stage competitions
+                    From captivating on-stage performances like music & Khavalis to intricate off-stage competitions
                     such as essay writing and painting, Sahithyolsav celebrates every facet of artistic expression.
                     We encourage everyone to participate, cheer for their favorite sectors, and make this event a grand success!
                 </p>
@@ -104,9 +104,9 @@ const HomePage = () => {
                 <h2>Get in Touch</h2>
                 <p>Have questions or need assistance? Reach out to us!</p>
                 <ul>
-                    <li><strong>Email:</strong> info@sahithyolsav.com</li>
-                    <li><strong>Phone:</strong> +91 98765 43210</li>
-                    <li><strong>Address:</strong> Cultural Event Grounds, Iritty Division, Kerala</li>
+                    <li><strong>Email:</strong> irittyduvision@sahithyolsav.com</li>
+                    <li><strong>Phone:</strong> +91 XXXXXXXX</li>
+                    <li><strong>Address:</strong> Students Center, Iritty Division, Kerala</li>
                 </ul>
                 <p>For more details, visit our <Link to="/info" className="text-link">Information Page</Link>.</p>
             </section>
