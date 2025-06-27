@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext.jsx'; // Correct path to AuthContext
 import { MessageBox, Modal } from './UtilityComponents.jsx'; // Import utility components
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs, setDoc } from 'firebase/firestore';
+import { createUserWithEmailAndPassword } from 'firebase/auth'; // Explicitly import createUserWithEmailAndPassword
 
 // Predefined event categories
 const EVENT_CATEGORIES = ["Kids", "LP", "UP", "HS", "HSS", "Junior", "Campus"];
@@ -22,7 +23,7 @@ const RANK_POINT_SCHEMES = {
 };
 
 const AdminDashboard = () => {
-    const { currentUser, db, auth, appId } = useAuth();
+    const { currentUser, db, auth, appId } = useAuth(); // Destructure 'auth' from useAuth
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('events'); // Default active tab
     const [message, setMessage] = useState('');
@@ -602,6 +603,7 @@ const AdminDashboard = () => {
                     setMessage(`Judge ${judgeName} updated successfully.`);
                     setEditingJudgeId(null);
                 } else {
+                    // Corrected: Call createUserWithEmailAndPassword as a method of 'auth'
                     const userCredential = await createUserWithEmailAndPassword(auth, judgeEmail, judgePassword);
                     const judgeId = userCredential.user.uid;
 
@@ -651,7 +653,7 @@ const AdminDashboard = () => {
                         <input type="text" value={judgeName} onChange={(e) => setJudgeName(e.target.value)} required />
                     </div>
                     <div className="form-group">
-                        <label>Judge Email (Unique ID, e.g., judge1@sahithyolsav.com):</label>
+                        <label>Judge Email (Unique ID, e.g., judge1@judge.com):</label>
                         <input type="email" value={judgeEmail} onChange={(e) => setJudgeEmail(e.target.value)} required />
                     </div>
                     {!editingJudgeId && (
@@ -1427,6 +1429,7 @@ const AdminDashboard = () => {
 
             try {
                 const sectorEmail = `${sectorName.toLowerCase().replace(/\s/g, '')}@sector.com`;
+                // Corrected: Call createUserWithEmailAndPassword as a method of 'auth'
                 const userCredential = await createUserWithEmailAndPassword(auth, sectorEmail, sectorPassword);
                 const sectorUid = userCredential.user.uid;
 
