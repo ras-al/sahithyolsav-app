@@ -17,10 +17,14 @@ const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__f
   appId: "1:662466879521:web:a71a5060ed7076c6fd0360"
 };/* Your actual Firebase config for local dev */
 const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
+
+// Predefined event categories for the application
+const EVENT_CATEGORIES = ["Kids", "LP", "UP", "HS", "HSS", "Junior", "Campus", "Senior", "General", "Campus Girls"]; // Updated categories
 
 // Authentication Context
 export const AuthContext = createContext(null);
@@ -117,7 +121,8 @@ export function AuthProvider({ children }) {
         db,
         auth,
         appId,
-        sectorDetails
+        sectorDetails,
+        EVENT_CATEGORIES // Export EVENT_CATEGORIES
     };
 
     return (

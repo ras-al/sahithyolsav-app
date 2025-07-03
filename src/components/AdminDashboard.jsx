@@ -7,9 +7,6 @@ import { MessageBox, Modal } from './UtilityComponents.jsx'; // Import utility c
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs, setDoc } from 'firebase/firestore';
 import { createUserWithEmailAndPassword } from 'firebase/auth'; // Explicitly import createUserWithEmailAndPassword
 
-// Predefined event categories
-const EVENT_CATEGORIES = ["Kids", "LP", "UP", "HS", "HSS", "Junior", "Campus"];
-
 // Define point schemes for leaderboard based on rank
 const RANK_POINT_SCHEMES = {
     group: {
@@ -23,7 +20,7 @@ const RANK_POINT_SCHEMES = {
 };
 
 const AdminDashboard = () => {
-    const { currentUser, db, auth, appId } = useAuth(); // Destructure 'auth' from useAuth
+    const { currentUser, db, auth, appId, EVENT_CATEGORIES } = useAuth(); // Destructure 'auth' and EVENT_CATEGORIES from useAuth
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('events'); // Default active tab
     const [message, setMessage] = useState('');
@@ -653,7 +650,7 @@ const AdminDashboard = () => {
                         <input type="text" value={judgeName} onChange={(e) => setJudgeName(e.target.value)} required />
                     </div>
                     <div className="form-group">
-                        <label>Judge Email (Unique ID, e.g., judge1@judge.com):</label>
+                        <label>Judge Email (Unique ID, e.g., judge1@sahithyolsav.com):</label>
                         <input type="email" value={judgeEmail} onChange={(e) => setJudgeEmail(e.target.value)} required />
                     </div>
                     {!editingJudgeId && (

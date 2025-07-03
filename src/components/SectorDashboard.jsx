@@ -6,11 +6,8 @@ import { useAuth } from '../AuthContext.jsx'; // Correct path to AuthContext
 import { MessageBox, LoadingSpinner } from './UtilityComponents.jsx'; // Import utility components
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where } from 'firebase/firestore';
 
-// Predefined event categories for the application
-const EVENT_CATEGORIES = ["Kids", "LP", "UP", "HS", "HSS", "Junior", "Campus"];
-
 const SectorDashboard = () => {
-    const { currentUser, db, appId, loadingAuth, sectorDetails } = useAuth();
+    const { currentUser, db, appId, loadingAuth, sectorDetails, EVENT_CATEGORIES } = useAuth(); // Destructure EVENT_CATEGORIES from useAuth
     const navigate = useNavigate();
     const [message, setMessage] = useState('');
     const [participants, setParticipants] = useState([]);

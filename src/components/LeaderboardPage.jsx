@@ -5,11 +5,8 @@ import { useAuth } from '../AuthContext.jsx'; // Correct path to AuthContext
 import { MessageBox } from './UtilityComponents.jsx'; // Import MessageBox
 import { doc, onSnapshot } from 'firebase/firestore'; // Import Firestore functions
 
-// Predefined event categories for the application (needed for leaderboard columns)
-const EVENT_CATEGORIES = ["Kids", "LP", "UP", "HS", "HSS", "Junior", "Campus"];
-
 const LeaderboardPage = () => {
-    const { db, appId } = useAuth();
+    const { db, appId, EVENT_CATEGORIES } = useAuth(); // Destructure EVENT_CATEGORIES from useAuth
     const [leaderboardSummary, setLeaderboardSummary] = useState(null); // Stores the full summary
     const [message, setMessage] = useState('');
 
