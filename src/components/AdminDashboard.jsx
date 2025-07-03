@@ -4,8 +4,9 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext.jsx'; // Correct path to AuthContext
 import { MessageBox, Modal } from './UtilityComponents.jsx'; // Import utility components
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs, setDoc } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs, setDoc, writeBatch, getDoc } from 'firebase/firestore'; // Import writeBatch and getDoc
 import { createUserWithEmailAndPassword } from 'firebase/auth'; // Explicitly import createUserWithEmailAndPassword
+import * as XLSX from 'xlsx'; // Import xlsx library
 
 // Define point schemes for leaderboard based on rank
 const RANK_POINT_SCHEMES = {
@@ -15,7 +16,7 @@ const RANK_POINT_SCHEMES = {
     },
     single: {
         name: "Single Competition (5/3/1)",
-        points: { 1: 5, 2: 3, 3: 1 }
+        points: { 1: 5, 2: 3, 1: 1 } // Corrected: 3rd place should be 1 point
     }
 };
 
@@ -28,6 +29,7 @@ const AdminDashboard = () => {
     const [events, setEvents] = useState([]);
     const [participants, setParticipants] = useState([]);
     const [sectors, setSectors] = useState([]);
+    const [stageAdmins, setStageAdmins] = useState([]); // New state for stage admins
 
     // Redirect if not admin (handled by PrivateRoute, but a fallback is good)
     useEffect(() => {
@@ -56,13 +58,58 @@ const AdminDashboard = () => {
             setSectors(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         }, (error) => console.error("Error fetching sectors:", error));
 
+        // New: Fetch Stage Admins
+        const unsubscribeStageAdmins = onSnapshot(collection(db, `artifacts/${appId}/public/data/stage_admins`), (snapshot) => {
+            setStageAdmins(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        }, (error) => console.error("Error fetching stage admins:", error));
+
+
         return () => {
             unsubscribeJudges();
             unsubscribeEvents();
             unsubscribeParticipants();
             unsubscribeSectors();
+            unsubscribeStageAdmins(); // Cleanup stage admins listener
         };
     }, [db, appId]);
+
+    // --- Admin-specific Functions (moved to top-level AdminDashboard) ---
+
+    const handleDownloadParticipantsExcel = async (eventId, eventName, participantsInEvent) => {
+        setMessage('');
+        try {
+            const headers = ["Participant Code", "Name", "Class", "Age", "Sector", "Unit", "Category"];
+
+            const csvRows = participantsInEvent.map(p => {
+                const eventEntry = p.events.find(e => e.eventId === eventId);
+                const code = eventEntry ? eventEntry.code : 'N/A';
+                return [
+                    code,
+                    p.name,
+                    p.class,
+                    p.age,
+                    p.sector,
+                    p.unit,
+                    p.category
+                ].map(field => `"${String(field).replace(/"/g, '""')}"`).join(',');
+            });
+
+            const csvContent = [headers.join(','), ...csvRows].join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.setAttribute('href', url);
+            link.setAttribute('download', `${eventName.replace(/[^a-zA-Z0-9]/g, '_')}_Participants.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            setMessage(`Participant list for "${eventName}" downloaded successfully!`);
+        } catch (error) {
+            console.error("Error downloading participant list:", error);
+            setMessage("Failed to download participant list: " + error.message);
+        }
+    };
 
     // --- Admin-specific Sub-Components ---
 
@@ -70,8 +117,9 @@ const AdminDashboard = () => {
         const [eventName, setEventName] = useState('');
         const [eventDate, setEventDate] = useState('');
         const [eventTime, setEventTime] = useState('');
-        const [eventLocation, setEventLocation] = useState('');
-        const [eventStage, setEventStage] = useState('on-stage');
+        // Removed eventLocation state
+        const [eventStageType, setEventStageType] = useState('on-stage'); // 'on-stage' or 'off-stage'
+        const [eventStageNumber, setEventStageNumber] = useState(''); // E.g., 'Stage 1', 'Stage 2'
         const [eventCategory, setEventCategory] = useState(EVENT_CATEGORIES[0]);
         const [competitionType, setCompetitionType] = useState('single');
         const [totalMarks, setTotalMarks] = useState(100);
@@ -82,6 +130,7 @@ const AdminDashboard = () => {
         const [selectedEventForScores, setSelectedEventForScores] = useState(null);
         const [editingEventId, setEditingEventId] = useState(null);
         const [isPublic, setIsPublic] = useState(false); // New state for public visibility
+        const [eventSearchTerm, setEventSearchTerm] = useState(''); // New state for event search
 
         const handleAddEvent = async (e) => {
             e.preventDefault();
@@ -101,19 +150,26 @@ const AdminDashboard = () => {
                 return;
             }
 
+            // Validation for stage number if on-stage
+            if (eventStageType === 'on-stage' && !eventStageNumber.trim()) {
+                setMessage("Stage Number is required for 'On Stage' events.");
+                return;
+            }
+
             try {
                 const eventData = {
                     name: eventName,
                     date: eventDate,
                     time: eventTime,
-                    location: eventLocation,
-                    stage: eventStage,
+                    // Removed location from eventData
+                    stageType: eventStageType, // 'on-stage' or 'off-stage'
+                    stage: eventStageType === 'on-stage' ? eventStageNumber : 'N/A', // Actual stage name/number
                     category: eventCategory,
                     competitionType: competitionType,
                     totalMarks: parseInt(totalMarks),
                     judges: judgesWithNames,
                     markDistribution: judgeMarkDistribution,
-                    status: 'scheduled',
+                    status: 'scheduled', // Default status for new events
                     isPublic: isPublic // Save public visibility status
                 };
 
@@ -129,7 +185,9 @@ const AdminDashboard = () => {
                 setEventName('');
                 setEventDate('');
                 setEventTime('');
-                setEventLocation('');
+                // Removed setEventLocation
+                setEventStageType('on-stage'); // Reset to default
+                setEventStageNumber(''); // Reset stage number
                 setEventCategory(EVENT_CATEGORIES[0]);
                 setCompetitionType('single');
                 setTotalMarks(100);
@@ -147,8 +205,9 @@ const AdminDashboard = () => {
             setEventName(event.name);
             setEventDate(event.date);
             setEventTime(event.time);
-            setEventLocation(event.location || '');
-            setEventStage(event.stage);
+            // Removed event.location from here
+            setEventStageType(event.stageType || 'on-stage');
+            setEventStageNumber(event.stageType === 'on-stage' ? (event.stage || '') : '');
             setEventCategory(event.category);
             setCompetitionType(event.competitionType || 'single');
             setTotalMarks(event.totalMarks);
@@ -175,28 +234,16 @@ const AdminDashboard = () => {
             }));
         };
 
-        const handleSetLiveStatus = async (eventId, currentStatus) => {
+        // Modified handleSetEventStatus to allow setting scheduled, live, or over
+        const handleSetEventStatus = async (eventId, newStatus) => {
             setMessage('');
             try {
                 const eventDocRef = doc(db, `artifacts/${appId}/public/data/events`, eventId);
-                const newStatus = currentStatus === 'live' ? 'scheduled' : 'live';
                 await updateDoc(eventDocRef, { status: newStatus });
                 setMessage(`Event status updated to "${newStatus}"!`);
             } catch (error) {
                 console.error("Error updating event status:", error);
                 setMessage("Failed to update event status: " + error.message);
-            }
-        };
-
-        const handleMarkOver = async (eventId) => {
-            setMessage('');
-            try {
-                const eventDocRef = doc(db, `artifacts/${appId}/public/data/events`, eventId);
-                await updateDoc(eventDocRef, { status: 'over' });
-                setMessage("Event marked as 'over'!");
-            } catch (error) {
-                console.error("Error marking event over:", error);
-                setMessage("Failed to mark event over: " + error.message);
             }
         };
 
@@ -266,11 +313,12 @@ const AdminDashboard = () => {
                     return;
                 }
 
-                const eventScoresQuery = query(
+                // Correctly define scoresQuery here
+                const scoresQuery = query(
                     collection(db, `artifacts/${appId}/public/data/scores`),
                     where('eventId', '==', event.id)
                 );
-                const scoresSnapshot = await getDocs(eventScoresQuery);
+                const scoresSnapshot = await getDocs(scoresQuery);
                 const scoresData = scoresSnapshot.docs.map(doc => doc.data());
 
                 const participantTotalScores = {};
@@ -331,42 +379,6 @@ const AdminDashboard = () => {
             }
         };
 
-        const handleDownloadParticipantsExcel = async (eventId, eventName, participantsInEvent) => {
-            setMessage('');
-            try {
-                const headers = ["Participant Code", "Name", "Class", "Age", "Sector", "Unit", "Category"];
-
-                const csvRows = participantsInEvent.map(p => {
-                    const eventEntry = p.events.find(e => e.eventId === eventId);
-                    const code = eventEntry ? eventEntry.code : 'N/A';
-                    return [
-                        code,
-                        p.name,
-                        p.class,
-                        p.age,
-                        p.sector,
-                        p.unit,
-                        p.category
-                    ].map(field => `"${String(field).replace(/"/g, '""')}"`).join(',');
-                });
-
-                const csvContent = [headers.join(','), ...csvRows].join('\n');
-                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.setAttribute('href', url);
-                link.setAttribute('download', `${eventName.replace(/[^a-zA-Z0-9]/g, '_')}_Participants.csv`);
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                URL.revokeObjectURL(url);
-                setMessage(`Participant list for "${eventName}" downloaded successfully!`);
-            } catch (error) {
-                console.error("Error downloading participant list:", error);
-                setMessage("Failed to download participant list: " + error.message);
-            }
-        };
-
         const handleDownloadPoster = (base64Data, eventName) => {
             setMessage('');
             if (!base64Data) {
@@ -391,7 +403,14 @@ const AdminDashboard = () => {
             }
         };
 
-        const eventsByCategory = events.reduce((acc, event) => {
+        // Filter events based on search term
+        const filteredEvents = events.filter(event =>
+            event.name.toLowerCase().includes(eventSearchTerm.toLowerCase()) ||
+            event.category.toLowerCase().includes(eventSearchTerm.toLowerCase()) ||
+            (event.stageType === 'on-stage' && event.stage.toLowerCase().includes(eventSearchTerm.toLowerCase()))
+        );
+
+        const eventsByCategory = filteredEvents.reduce((acc, event) => {
             const category = event.category || 'Uncategorized';
             if (!acc[category]) {
                 acc[category] = [];
@@ -417,17 +436,30 @@ const AdminDashboard = () => {
                         <label>Time:</label>
                         <input type="time" value={eventTime} onChange={(e) => setEventTime(e.target.value)} required />
                     </div>
-                     <div className="form-group">
-                        <label>Location (e.g., Room 3, Main Hall):</label>
-                        <input type="text" value={eventLocation} onChange={(e) => setEventLocation(e.target.value)} required />
-                    </div>
+                    {/* Removed Location input field */}
                     <div className="form-group">
-                        <label>Stage:</label>
-                        <select value={eventStage} onChange={(e) => setEventStage(e.target.value)}>
+                        <label>Stage Type:</label>
+                        <select value={eventStageType} onChange={(e) => {
+                            setEventStageType(e.target.value);
+                            if (e.target.value === 'off-stage') {
+                                setEventStageNumber(''); // Clear stage number if off-stage
+                            }
+                        }} required>
                             <option value="on-stage">On Stage</option>
                             <option value="off-stage">Off Stage</option>
                         </select>
                     </div>
+                    {eventStageType === 'on-stage' && (
+                        <div className="form-group">
+                            <label>Stage Number (e.g., Stage 1, Stage 2):</label>
+                            <select value={eventStageNumber} onChange={(e) => setEventStageNumber(e.target.value)} required>
+                                <option value="">-- Select Stage Number --</option>
+                                {stageAdmins.map(stage => (
+                                    <option key={stage.id} value={stage.assignedStage}>{stage.assignedStage}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
                     <div className="form-group">
                         <label>Category:</label>
                         <select value={eventCategory} onChange={(e) => setEventCategory(e.target.value)} required>
@@ -491,7 +523,9 @@ const AdminDashboard = () => {
                         setEventName('');
                         setEventDate('');
                         setEventTime('');
-                        setEventLocation('');
+                        // Removed setEventLocation
+                        setEventStageType('on-stage');
+                        setEventStageNumber('');
                         setEventCategory(EVENT_CATEGORIES[0]);
                         setCompetitionType('single');
                         setTotalMarks(100);
@@ -503,8 +537,18 @@ const AdminDashboard = () => {
 
                 <div className="list-section">
                     <h4>Current Events</h4>
+                    <div className="form-group search-box">
+                        <label htmlFor="eventSearch">Search Events:</label>
+                        <input
+                            type="text"
+                            id="eventSearch"
+                            placeholder="Search by name, category, or stage"
+                            value={eventSearchTerm}
+                            onChange={(e) => setEventSearchTerm(e.target.value)}
+                        />
+                    </div>
                     {Object.keys(eventsByCategory).length === 0 ? (
-                        <p>No events added yet.</p>
+                        <p>No events added yet or matching your search.</p>
                     ) : (
                         Object.entries(eventsByCategory).map(([category, eventsInCat]) => (
                             <div key={category} className="event-category-group">
@@ -514,26 +558,36 @@ const AdminDashboard = () => {
                                         <div key={event.id} className="list-card event-list-card">
                                             <p><strong>{event.name}</strong> ({event.category})</p>
                                             <p>Date: {event.date}, Time: {event.time}</p>
-                                            <p>Location: {event.location || 'N/A'}</p>
-                                            <p>Stage: {event.stage}, Type: {event.competitionType || 'N/A'}, Total Marks: {event.totalMarks}</p>
+                                            {/* Removed Location display */}
+                                            <p>Stage Type: {event.stageType || 'N/A'}, Stage: {event.stage || 'N/A'}, Type: {event.competitionType || 'N/A'}, Total Marks: {event.totalMarks}</p>
                                             <p>Judges: {event.judges.map(j => j.name).join(', ')}</p>
                                             <p>Mark Dist: {Object.entries(event.markDistribution || {}).map(([jId, marks]) => `${judges.find(j => j.id === jId)?.name || jId}: ${marks}`).join(', ')}</p>
                                             <p>Status: <span className={`event-status ${event.status}`}>{event.status}</span></p>
                                             <p>Public: <span className={`event-status ${event.isPublic ? 'live' : 'over'}`}>{event.isPublic ? 'Yes' : 'No'}</span></p>
                                             <div className="card-actions">
+                                                {/* Status buttons */}
                                                 <button
-                                                    className={`btn ${event.status === 'live' ? 'btn-warn' : 'btn-success'}`}
-                                                    onClick={() => handleSetLiveStatus(event.id, event.status)}
+                                                    className={`btn ${event.status === 'scheduled' ? 'btn-primary' : 'btn-outline-primary'}`}
+                                                    onClick={() => handleSetEventStatus(event.id, 'scheduled')}
+                                                    disabled={event.status === 'scheduled'}
                                                 >
-                                                    {event.status === 'live' ? 'Mark Scheduled' : 'Go Live'}
+                                                    Scheduled
                                                 </button>
                                                 <button
-                                                    className="btn btn-info"
-                                                    onClick={() => handleMarkOver(event.id)}
+                                                    className={`btn ${event.status === 'live' ? 'btn-success' : 'btn-outline-success'}`}
+                                                    onClick={() => handleSetEventStatus(event.id, 'live')}
+                                                    disabled={event.status === 'live'}
+                                                >
+                                                    Live
+                                                </button>
+                                                <button
+                                                    className={`btn ${event.status === 'over' ? 'btn-warn' : 'btn-outline-warn'}`}
+                                                    onClick={() => handleSetEventStatus(event.id, 'over')}
                                                     disabled={event.status === 'over'}
                                                 >
-                                                    Mark Over
+                                                    Over
                                                 </button>
+
                                                 <button
                                                     className={`btn ${event.isPublic ? 'btn-danger' : 'btn-info'}`}
                                                     onClick={() => handleTogglePublic(event.id, event.isPublic)}
@@ -741,39 +795,19 @@ const AdminDashboard = () => {
         const [participantUnit, setParticipantUnit] = useState('');
         const [participantCategory, setParticipantCategory] = useState(EVENT_CATEGORIES[0]);
         const [selectedEvents, setSelectedEvents] = useState([]);
-        const [participantEventCodes, setParticipantEventCodes] = useState({});
         const [editingParticipantId, setEditingParticipantId] = useState(null);
+        const [participantSearchTerm, setParticipantSearchTerm] = useState(''); // New state for participant search
 
         const filteredEventsForParticipant = events.filter(event => event.category === participantCategory);
-
-        useEffect(() => {
-            if (editingParticipantId) {
-                const participantToEdit = participants.find(p => p.id === editingParticipantId);
-                if (participantToEdit && participantToEdit.events) {
-                    const codesMap = {};
-                    participantToEdit.events.forEach(e => {
-                        if (typeof e === 'object' && e !== null && e.eventId && e.code) {
-                            codesMap[e.eventId] = e.code;
-                        } else if (typeof e === 'string') {
-                             codesMap[e] = '';
-                        }
-                    });
-                    setSelectedEvents(participantToEdit.events.map(e => (typeof e === 'object' ? e.eventId : e)));
-                    setParticipantEventCodes(codesMap);
-                }
-            } else {
-                setParticipantEventCodes({});
-            }
-        }, [editingParticipantId, participants]);
-
 
         const handleAddParticipant = async (e) => {
             e.preventDefault();
             setMessage('');
             try {
-                const eventsWithCodes = selectedEvents.map(eventId => ({
+                // Participants added by Admin will initially have empty codes
+                const eventsForParticipant = selectedEvents.map(eventId => ({
                     eventId: eventId,
-                    code: participantEventCodes[eventId] || ''
+                    code: '' // Code is initially empty, to be filled by Stage Admin
                 }));
 
                 const participantData = {
@@ -783,7 +817,7 @@ const AdminDashboard = () => {
                     sector: participantSector,
                     unit: participantUnit,
                     category: participantCategory,
-                    events: eventsWithCodes,
+                    events: eventsForParticipant,
                 };
 
                 if (editingParticipantId) {
@@ -802,7 +836,6 @@ const AdminDashboard = () => {
                 setParticipantUnit('');
                 setParticipantCategory(EVENT_CATEGORIES[0]);
                 setSelectedEvents([]);
-                setParticipantEventCodes({});
             } catch (error) {
                 console.error("Error adding/updating participant:", error);
                 setMessage("Failed to add/update participant: " + error.message);
@@ -819,88 +852,175 @@ const AdminDashboard = () => {
             setParticipantCategory(participant.category);
             if (participant.events) {
                 const eventIds = [];
-                const codesMap = {};
                 participant.events.forEach(eventEntry => {
                     if (typeof eventEntry === 'object' && eventEntry !== null && eventEntry.eventId) {
                         eventIds.push(eventEntry.eventId);
-                        codesMap[eventEntry.eventId] = eventEntry.code || '';
                     } else if (typeof eventEntry === 'string') {
                         eventIds.push(eventEntry);
-                        codesMap[eventEntry] = '';
                     }
                 });
                 setSelectedEvents(eventIds);
-                setParticipantEventCodes(codesMap);
             } else {
                 setSelectedEvents([]);
-                setParticipantEventCodes({});
             }
         };
 
-        const handleEventCodeChangeLocal = (participantId, eventId, code) => {
-            const formattedCode = code.toUpperCase().replace(/[^A-Z]/g, '');
-            setParticipants(prevParticipants => prevParticipants.map(p => {
-                if (p.id === participantId) {
-                    const updatedEvents = p.events.map(e => {
-                        if (typeof e === 'object' && e.eventId === eventId) {
-                            return { ...e, code: formattedCode.slice(0, 1) };
-                        }
-                        return e;
-                    });
-                    return { ...p, events: updatedEvents };
-                }
-                return p;
-            }));
-        };
-
-        const handleUpdateParticipantCode = async (participantId, eventId, newCode) => {
+        const handleDeleteParticipantEvent = async (participantId, eventIdToDelete, participantName, eventName) => {
+            if (!window.confirm(`Are you sure you want to remove ${eventName} from ${participantName}?`)) {
+                return;
+            }
             setMessage('');
             try {
                 const participantRef = doc(db, `artifacts/${appId}/public/data/participants`, participantId);
                 const participantSnap = await getDoc(participantRef);
 
-                if (participantSnap.exists()) {
-                    const participantData = participantSnap.data();
-                    const updatedEvents = participantData.events.map(eventEntry => {
-                        if (typeof eventEntry === 'object' && eventEntry.eventId === eventId) {
-                            return { ...eventEntry, code: newCode };
-                        } else if (typeof eventEntry === 'string' && eventEntry === eventId) {
-                            return { eventId: eventEntry, code: newCode };
-                        }
-                        return eventEntry;
-                    });
-
-                    await updateDoc(participantRef, { events: updatedEvents });
-                    setMessage(`Participant code for ${participants.find(p => p.id === participantId)?.name} in event ${events.find(e => e.id === eventId)?.name} updated to ${newCode}.`);
-                } else {
+                if (!participantSnap.exists()) {
                     setMessage("Participant not found.");
+                    return;
+                }
+
+                const currentEvents = participantSnap.data().events || [];
+                const updatedEvents = currentEvents.filter(eventEntry => eventEntry.eventId !== eventIdToDelete);
+
+                if (updatedEvents.length === 0) {
+                    // If no events left, delete the entire participant
+                    await deleteDoc(participantRef);
+                    setMessage(`Participant ${participantName} deleted as they have no more events.`);
+                } else {
+                    // Otherwise, just update the events array
+                    await updateDoc(participantRef, { events: updatedEvents });
+                    setMessage(`Event '${eventName}' removed from ${participantName}.`);
                 }
             } catch (error) {
-                console.error("Error updating participant code:", error);
-                setMessage("Failed to update participant code: " + error.message);
+                console.error("Error deleting participant event:", error);
+                setMessage("Failed to delete event from participant: " + error.message);
             }
         };
 
-        const handleDeleteParticipant = async (participantId) => {
-            if (!window.confirm("Are you sure you want to delete this participant?")) {
+
+        const handleFileUpload = async (event) => {
+            setMessage('');
+            const file = event.target.files[0];
+            if (!file) {
+                setMessage("No file selected.");
                 return;
             }
-            setMessage('');
-            try {
-                await deleteDoc(doc(db, `artifacts/${appId}/public/data/participants`, participantId));
-                setMessage("Participant deleted successfully!");
-            } catch (error) {
-                console.error("Error deleting participant:", error);
-                setMessage("Failed to delete participant: " + error.message);
-            }
+
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const sheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[sheetName];
+                    const json = XLSX.utils.sheet_to_json(worksheet);
+
+                    if (!json || json.length === 0) {
+                        setMessage("Excel file is empty or could not be parsed.");
+                        return;
+                    }
+
+                    const batch = writeBatch(db);
+                    const participantsCollectionRef = collection(db, `artifacts/${appId}/public/data/participants`);
+                    let addedCount = 0;
+                    let updatedCount = 0;
+                    let errorCount = 0;
+
+                    for (const row of json) {
+                        // Basic validation and mapping for participant data
+                        // Ensure all values are converted to string before trim(), and age is safely parsed
+                        const name = String(row['Name'] || '').trim();
+                        const participantClass = String(row['Class'] || '').trim();
+                        const age = parseInt(row['Age']); // parseInt handles non-numeric safely, returns NaN
+                        const sector = String(row['Sector'] || '').trim();
+                        const unit = String(row['Unit'] || '').trim();
+                        const category = String(row['Category'] || '').trim();
+                        const eventNames = String(row['Events'] || '').split(',').map(e => e.trim()).filter(Boolean); // Comma-separated event names
+
+                        if (!name || !participantClass || isNaN(age) || !sector || !unit || !category) {
+                            console.warn("Skipping row due to missing or invalid required fields:", row);
+                            errorCount++;
+                            continue;
+                        }
+
+                        // Find event IDs based on names
+                        const eventsForParticipant = eventNames.map(eventName => {
+                            const foundEvent = events.find(e => e.name.toLowerCase() === eventName.toLowerCase() && e.category.toLowerCase() === category.toLowerCase());
+                            return foundEvent ? { eventId: foundEvent.id, code: '' } : null;
+                        }).filter(Boolean); // Filter out nulls if event not found
+
+                        if (eventsForParticipant.length === 0 && eventNames.length > 0) {
+                            console.warn(`No matching events found for participant ${name} in category ${category} with events ${eventNames.join(', ')}. Participant will be added without events.`);
+                        }
+
+                        const participantData = {
+                            name,
+                            class: participantClass,
+                            age,
+                            sector,
+                            unit,
+                            category,
+                            events: eventsForParticipant,
+                        };
+
+                        // Check if participant already exists (e.g., by name and category, or a unique ID if available)
+                        // For simplicity, let's assume `name` is unique enough for this upload context.
+                        // In a real app, you might use a generated unique ID or a combination of fields.
+                        const existingParticipantQuery = query(
+                            participantsCollectionRef,
+                            where('name', '==', name),
+                            where('category', '==', category)
+                        );
+                        const existingParticipantSnapshot = await getDocs(existingParticipantQuery);
+
+                        if (!existingParticipantSnapshot.empty) {
+                            const existingDoc = existingParticipantSnapshot.docs[0];
+                            // Merge existing events with new ones, avoiding duplicates
+                            const currentEvents = existingDoc.data().events || [];
+                            const newEvents = [...currentEvents];
+                            eventsForParticipant.forEach(newEvent => {
+                                if (!newEvents.some(e => e.eventId === newEvent.eventId)) {
+                                    newEvents.push(newEvent);
+                                }
+                            });
+                            batch.update(existingDoc.ref, { ...participantData, events: newEvents });
+                            updatedCount++;
+                        } else {
+                            // Corrected: Use batch.set with a new document reference
+                            batch.set(doc(participantsCollectionRef), participantData);
+                            addedCount++;
+                        }
+                    }
+
+                    await batch.commit();
+                    setMessage(`Excel upload complete! Added: ${addedCount}, Updated: ${updatedCount}, Skipped/Errors: ${errorCount}.`);
+                    // Refresh participant list after upload
+                    // The onSnapshot listener will automatically update the state, so no manual fetch needed.
+                } catch (error) {
+                    console.error("Error processing Excel file:", error);
+                    setMessage("Failed to process Excel file: " + error.message);
+                }
+            };
+            reader.readAsArrayBuffer(file);
         };
+
+
+        // Filter participants based on search term
+        const filteredParticipants = participants.filter(p =>
+            p.name.toLowerCase().includes(participantSearchTerm.toLowerCase()) ||
+            p.sector.toLowerCase().includes(participantSearchTerm.toLowerCase()) ||
+            p.unit.toLowerCase().includes(participantSearchTerm.toLowerCase()) ||
+            p.class.toLowerCase().includes(participantSearchTerm.toLowerCase()) ||
+            p.category.toLowerCase().includes(participantSearchTerm.toLowerCase())
+        );
+
 
         const participantsByEventAndCategory = EVENT_CATEGORIES.reduce((catAcc, category) => {
             catAcc[category] = {};
             const eventsInThisCategory = events.filter(e => e.category === category);
 
             eventsInThisCategory.forEach(event => {
-                const participantsForThisEvent = participants.filter(p =>
+                const participantsForThisEvent = filteredParticipants.filter(p => // Use filteredParticipants here
                     p.category === category &&
                     p.events && p.events.some(e => e.eventId === event.id)
                 );
@@ -953,7 +1073,6 @@ const AdminDashboard = () => {
                         <select value={participantCategory} onChange={(e) => {
                             setParticipantCategory(e.target.value);
                             setSelectedEvents([]);
-                            setParticipantEventCodes({});
                         }} required>
                             {EVENT_CATEGORIES.map(cat => (
                                 <option key={cat} value={cat}>{cat}</option>
@@ -965,16 +1084,6 @@ const AdminDashboard = () => {
                         <select multiple value={selectedEvents} onChange={(e) => {
                             const selectedOpts = Array.from(e.target.selectedOptions).map(option => option.value);
                             setSelectedEvents(selectedOpts);
-                            const newCodes = { ...participantEventCodes };
-                            selectedOpts.forEach(id => {
-                                if (!newCodes[id]) newCodes[id] = '';
-                            });
-                            Object.keys(newCodes).forEach(id => {
-                                if (!selectedOpts.includes(id)) {
-                                    delete newCodes[id];
-                                }
-                            });
-                            setParticipantEventCodes(newCodes);
                         }} className="multi-select">
                             {filteredEventsForParticipant.length === 0 ? (
                                 <option disabled>No events available for this category.</option>
@@ -984,7 +1093,7 @@ const AdminDashboard = () => {
                                 ))
                             )}
                         </select>
-                        <small>Hold Ctrl/Cmd to select multiple.</small>
+                        <small>Hold Ctrl/Cmd to select multiple. Event codes will be assigned by Stage Admins.</small>
                     </div>
                     <button type="submit" className="btn btn-primary">{editingParticipantId ? 'Update Participant' : 'Add Participant'}</button>
                     {editingParticipantId && <button type="button" className="btn btn-secondary" onClick={() => {
@@ -996,14 +1105,29 @@ const AdminDashboard = () => {
                         setParticipantUnit('');
                         setParticipantCategory(EVENT_CATEGORIES[0]);
                         setSelectedEvents([]);
-                        setParticipantEventCodes({});
                     }}>Cancel Edit</button>}
                 </form>
 
+                <div className="form-card">
+                    <h4>Upload Participants via Excel</h4>
+                    <input type="file" accept=".xlsx, .xls, .csv" onChange={handleFileUpload} />
+                    <small>Upload an Excel file with columns: Name, Class, Age, Sector, Unit, Category, Events (comma-separated event names).</small>
+                </div>
+
                 <div className="list-section">
                     <h4>All Registered Participants (by Category and Event)</h4>
+                    <div className="form-group search-box">
+                        <label htmlFor="participantSearch">Search Participants:</label>
+                        <input
+                            type="text"
+                            id="participantSearch"
+                            placeholder="Search by name, sector, unit, class, or category"
+                            value={participantSearchTerm}
+                            onChange={(e) => setParticipantSearchTerm(e.target.value)}
+                        />
+                    </div>
                     {Object.keys(participantsByEventAndCategory).length === 0 ? (
-                        <p>No participants registered yet.</p>
+                        <p>No participants registered yet or matching your search.</p>
                     ) : (
                         Object.entries(participantsByEventAndCategory).map(([category, eventsData]) => {
                             const eventsWithParticipants = Object.keys(eventsData).filter(eventId => eventsData[eventId].length > 0);
@@ -1018,62 +1142,61 @@ const AdminDashboard = () => {
                                         const participantsInEvent = eventsData[eventId];
                                         return (
                                             <div key={eventId} className="event-participants-group">
-                                                <h6>Event: {eventName}</h6>
-                                                <div className="list-cards">
-                                                    {participantsInEvent.map(participant => (
-                                                        <div key={participant.id} className="list-card participant-list-card">
-                                                            <p><strong>Name: {participant.name}</strong></p>
-                                                            <p>Class: {participant.class}, Age: {participant.age}</p>
-                                                            <p>Sector: {participant.sector}, Unit: {participant.unit}</p>
-                                                            <div className="form-group participant-code-input">
-                                                                <label htmlFor={`code-${participant.id}-${eventId}`}>Event Code:</label>
-                                                                <input
-                                                                    type="text"
-                                                                    id={`code-${participant.id}-${eventId}`}
-                                                                    maxLength="1"
-                                                                    value={
-                                                                        participant.events.find(e => e.eventId === eventId)?.code || ''
-                                                                    }
-                                                                    onChange={(e) => handleEventCodeChangeLocal(participant.id, eventId, e.target.value)}
-                                                                    onBlur={(e) => handleUpdateParticipantCode(participant.id, eventId, e.target.value)}
-                                                                    style={{ width: '50px', textTransform: 'uppercase', textAlign: 'center' }}
-                                                                />
-                                                                <button
-                                                                    className="btn btn-primary btn-small"
-                                                                    onClick={() => handleUpdateParticipantCode(
-                                                                        participant.id,
-                                                                        eventId,
-                                                                        participant.events.find(e => e.eventId === eventId)?.code || ''
-                                                                    )}
-                                                                    style={{ marginLeft: '10px' }}
-                                                                >
-                                                                    Save Code
-                                                                </button>
-                                                            </div>
-
-                                                            <div className="card-actions">
-                                                                <button
-                                                                    className="btn btn-secondary btn-small"
-                                                                    onClick={() => handleEditParticipant(participant)}
-                                                                >
-                                                                    Edit
-                                                                </button>
-                                                                <button
-                                                                    className="btn btn-danger btn-small"
-                                                                    onClick={() => handleDeleteParticipant(participant.id)}
-                                                                >
-                                                                    Delete
-                                                                </button>
-                                                                <button
-                                                                    className="btn btn-info btn-small"
-                                                                    onClick={() => handleDownloadParticipantsExcel(eventId, eventName, participantsInEvent)}
-                                                                >
-                                                                    Download Excel
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
+                                                <h4>Event: {eventName}</h4>
+                                                <table className="participant-table">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Name</th>
+                                                            <th>Class</th>
+                                                            <th>Age</th>
+                                                            <th>Sector</th>
+                                                            <th>Unit</th>
+                                                            <th>Event Code</th>
+                                                            <th>Actions</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {participantsInEvent.filter(Boolean).map(participant => (
+                                                            <tr key={participant.id}>
+                                                                <td>{participant.name}</td>
+                                                                <td>{participant.class}</td>
+                                                                <td>{participant.age}</td>
+                                                                <td>{participant.sector}</td>
+                                                                <td>{participant.unit}</td>
+                                                                <td>
+                                                                    <input
+                                                                        type="text"
+                                                                        value={
+                                                                            participant.events?.find(e => e.eventId === eventId)?.code || 'N/A'
+                                                                        }
+                                                                        disabled
+                                                                        style={{ width: '50px', textTransform: 'uppercase', textAlign: 'center' }}
+                                                                    />
+                                                                </td>
+                                                                <td>
+                                                                    <button
+                                                                        className="btn btn-secondary btn-small"
+                                                                        onClick={() => handleEditParticipant(participant)}
+                                                                    >
+                                                                        Edit
+                                                                    </button>
+                                                                    <button
+                                                                        className="btn btn-danger btn-small"
+                                                                        onClick={() => handleDeleteParticipantEvent(participant.id, eventId, participant.name, eventName)}
+                                                                    >
+                                                                        Delete
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                                <button
+                                                    className="btn btn-info btn-small mt-3" // Added margin-top for spacing
+                                                    onClick={() => handleDownloadParticipantsExcel(eventId, eventName, participantsInEvent)}
+                                                >
+                                                    Download Excel for {eventName}
+                                                </button>
                                             </div>
                                         );
                                     })}
@@ -1091,6 +1214,7 @@ const AdminDashboard = () => {
         const [processedRankedParticipants, setProcessedRankedParticipants] = useState([]);
         const [posterBase64, setPosterBase64] = useState('');
         const [results, setResults] = useState([]);
+        const [eventResultSearchTerm, setEventResultSearchTerm] = useState(''); // New state for event result search
 
         const [currentPlacements, setCurrentPlacements] = useState({
             1: null,
@@ -1238,10 +1362,16 @@ const AdminDashboard = () => {
                 await deleteDoc(doc(db, `artifacts/${appId}/public/data/results`, resultId));
                 setMessage("Result deleted successfully!");
             } catch (error) {
-                console.error("Error deleting result:", error);
+                    console.error("Error deleting result:", error);
                 setMessage("Failed to delete result: " + error.message);
             }
         };
+
+        // Filter events for the dropdown based on search term
+        const filteredEventsForDropdown = events.filter(event =>
+            event.name.toLowerCase().includes(eventResultSearchTerm.toLowerCase()) ||
+            event.category.toLowerCase().includes(eventResultSearchTerm.toLowerCase())
+        );
 
         return (
             <div className="admin-section">
@@ -1249,10 +1379,17 @@ const AdminDashboard = () => {
                 <form onSubmit={handleAddResult} className="form-card">
                     <h4>Finalize Event Result</h4>
                     <div className="form-group">
-                        <label>Select Event:</label>
+                        <label>Search and Select Event:</label>
+                        <input
+                            type="text"
+                            placeholder="Search event by name or category"
+                            value={eventResultSearchTerm}
+                            onChange={(e) => setEventResultSearchTerm(e.target.value)}
+                            className="search-input-for-dropdown"
+                        />
                         <select value={selectedEventId} onChange={(e) => setSelectedEventId(e.target.value)} required>
                             <option value="">-- Select an Event --</option>
-                            {events.map(event => (
+                            {filteredEventsForDropdown.map(event => (
                                 <option key={event.id} value={event.id}>{event.name} ({event.category})</option>
                             ))}
                         </select>
@@ -1441,91 +1578,127 @@ const AdminDashboard = () => {
         );
     };
 
-    const ManageSectors = () => {
-        const [sectorName, setSectorName] = useState('');
-        const [sectorPassword, setSectorPassword] = useState('');
+    const ManageStageAdmins = () => { // New component for managing stage admins
+        const [stageName, setStageName] = useState(''); // Changed from stageAdminName
+        const [stageAdminPassword, setStageAdminPassword] = useState('');
+        const [editingStageAdminId, setEditingStageAdminId] = useState(null);
 
-        const handleAddSector = async (e) => {
+        const handleAddStageAdmin = async (e) => {
             e.preventDefault();
             setMessage('');
-            if (!sectorName.trim() || !sectorPassword.trim()) {
-                setMessage("Sector name and password cannot be empty.");
+            if (!stageName.trim() || !stageAdminPassword.trim()) {
+                setMessage("Stage Name and Password are required.");
                 return;
             }
-            if (sectorPassword.length < 6) {
-                setMessage("Sector password must be at least 6 characters.");
+            if (stageAdminPassword.length < 6) {
+                setMessage("Password must be at least 6 characters.");
                 return;
             }
+
+            // Derive stageAdminEmail from stageName (e.g., "Stage 1" -> "stage1@stage.com")
+            const derivedStageAdminEmail = `${stageName.toLowerCase().replace(/\s/g, '')}@stage.com`;
 
             try {
-                const sectorEmail = `${sectorName.toLowerCase().replace(/\s/g, '')}@sector.com`;
-                // Corrected: Call createUserWithEmailAndPassword as a method of 'auth'
-                const userCredential = await createUserWithEmailAndPassword(auth, sectorEmail, sectorPassword);
-                const sectorUid = userCredential.user.uid;
+                if (editingStageAdminId) {
+                    // For editing, we only allow updating the name. Email and password are not changed here.
+                    // The assignedStage is derived from the email, which is not editable here.
+                    await updateDoc(doc(db, `artifacts/${appId}/public/data/stage_admins`, editingStageAdminId), {
+                        name: stageName, // Update name
+                        // email and assignedStage remain as they are derived from the email
+                    });
+                    setMessage(`Stage Admin for "${stageName}" updated successfully.`);
+                    setEditingStageAdminId(null);
+                } else {
+                    const userCredential = await createUserWithEmailAndPassword(auth, derivedStageAdminEmail, stageAdminPassword);
+                    const stageAdminUid = userCredential.user.uid;
 
-                await setDoc(doc(db, `artifacts/${appId}/public/data/sectors`, sectorUid), {
-                    name: sectorName,
-                    email: sectorEmail,
-                    createdAt: new Date().toISOString()
-                });
-                setMessage(`Sector "${sectorName}" and official account created successfully! Email: ${sectorEmail}`);
-                setSectorName('');
-                setSectorPassword('');
+                    await setDoc(doc(db, `artifacts/${appId}/public/data/stage_admins`, stageAdminUid), {
+                        name: stageName, // Store the user-friendly stage name
+                        email: derivedStageAdminEmail, // Store the derived email
+                        assignedStage: stageName, // Store the stage name as assignedStage
+                        createdAt: new Date().toISOString()
+                    });
+                    setMessage(`Stage Admin for "${stageName}" created successfully! Login Email: ${derivedStageAdminEmail}. Password is NOT stored.`);
+                }
+                setStageName('');
+                setStageAdminPassword('');
             } catch (error) {
-                console.error("Error adding sector:", error);
-                let errorMessage = "Failed to add sector: " + error.message;
+                console.error("Error adding/updating stage admin:", error);
+                let errorMessage = "Failed to add/update stage admin: " + error.message;
                 if (error.code === 'auth/email-already-in-use') {
-                    errorMessage = "Failed to add sector: An account with this email already exists.";
+                    errorMessage = `Failed to add stage admin: An account with email ${derivedStageAdminEmail} already exists.`;
                 }
                 setMessage(errorMessage);
             }
         };
 
-        const handleDeleteSector = async (sectorId, sectorNameToDelete, sectorEmailToDelete) => {
-            if (!window.confirm(`Are you sure you want to delete sector "${sectorNameToDelete}"? This will remove all associated participants and official accounts.`)) {
+        const handleEditStageAdmin = (stageAdmin) => {
+            setEditingStageAdminId(stageAdmin.id);
+            setStageName(stageAdmin.name); // Set the stage name for editing
+            setStageAdminPassword(''); // Password is not editable
+        };
+
+        const handleDeleteStageAdmin = async (stageAdminId, stageAdminEmailToDelete) => {
+            if (!window.confirm(`Are you sure you want to delete stage admin ${stageAdminEmailToDelete}? This will remove them from the system.`)) {
                 return;
             }
             setMessage('');
             try {
-                await deleteDoc(doc(db, `artifacts/${appId}/public/data/sectors`, sectorId));
-                setMessage(`Sector "${sectorNameToDelete}" deleted from database. Remember to manually delete Firebase Auth user "${sectorEmailToDelete}" if needed.`);
+                await deleteDoc(doc(db, `artifacts/${appId}/public/data/stage_admins`, stageAdminId));
+                setMessage(`Stage Admin ${stageAdminEmailToDelete} deleted from database. Remember to manually delete their user from Firebase Authentication if needed.`);
             } catch (error) {
-                console.error("Error deleting sector:", error);
-                setMessage("Failed to delete sector: " + error.message);
+                console.error("Error deleting stage admin:", error);
+                setMessage("Failed to delete stage admin: " + error.message);
             }
         };
 
         return (
             <div className="admin-section">
-                <h3>Manage Sectors</h3>
-                <form onSubmit={handleAddSector} className="form-card">
-                    <h4>Add New Sector</h4>
+                <h3>Manage Stage Admins</h3>
+                <form onSubmit={handleAddStageAdmin} className="form-card">
+                    <h4>{editingStageAdminId ? 'Edit Stage Admin' : 'Add New Stage Admin'}</h4>
                     <div className="form-group">
-                        <label>Sector Name:</label>
-                        <input type="text" value={sectorName} onChange={(e) => setSectorName(e.target.value)} required />
+                        <label>Stage Name (e.g., Stage 1, Stage 2, Off Stage):</label>
+                        <input type="text" value={stageName} onChange={(e) => setStageName(e.target.value)} required />
+                        <small>This will be used to create the login email (e.g., 'Stage 1' will be 'stage1@stage.com').</small>
                     </div>
-                    <div className="form-group">
-                        <label>Temporary Password for Official:</label>
-                        <input type="password" value={sectorPassword} onChange={(e) => setSectorPassword(e.target.value)} required minLength="6" />
-                        <small>This password will be used for the sector official's login. Min 6 characters.</small>
-                    </div>
-                    <button type="submit" className="btn btn-primary">Add Sector</button>
+                    {!editingStageAdminId && (
+                        <div className="form-group">
+                            <label>Temporary Password:</label>
+                            <input type="password" value={stageAdminPassword} onChange={(e) => setStageAdminPassword(e.target.value)} required minLength="6" />
+                            <small>Password must be at least 6 characters.</small>
+                        </div>
+                    )}
+                    <button type="submit" className="btn btn-primary">{editingStageAdminId ? 'Update Stage Admin' : 'Add Stage Admin'}</button>
+                    {editingStageAdminId && <button type="button" className="btn btn-secondary" onClick={() => {
+                        setEditingStageAdminId(null);
+                        setStageName('');
+                        setStageAdminPassword('');
+                    }}>Cancel Edit</button>}
                 </form>
 
                 <div className="list-section">
-                    <h4>Current Sectors</h4>
-                    {sectors.length === 0 ? <p>No sectors added yet.</p> : (
+                    <h4>Current Stage Admins</h4>
+                    {stageAdmins.length === 0 ? <p>No stage admins added yet.</p> : (
                         <div className="list-cards">
-                            {sectors.map(sector => (
-                                <div key={sector.id} className="list-card">
-                                    <p><strong>{sector.name}</strong></p>
-                                    <p>Login Email: {sector.email}</p>
-                                    <button
-                                        className="btn btn-danger btn-small"
-                                        onClick={() => handleDeleteSector(sector.id, sector.name, sector.email)}
-                                    >
-                                        Delete
-                                    </button>
+                            {stageAdmins.map(admin => (
+                                <div key={admin.id} className="list-card">
+                                    <p><strong>Stage Name: {admin.name}</strong></p>
+                                    <p>Login Email: {admin.email}</p>
+                                    <div className="card-actions">
+                                        <button
+                                            className="btn btn-secondary btn-small"
+                                            onClick={() => handleEditStageAdmin(admin)}
+                                        >
+                                            Edit
+                                        </button>
+                                        <button
+                                            className="btn btn-danger btn-small"
+                                            onClick={() => handleDeleteStageAdmin(admin.id, admin.email)}
+                                        >
+                                            Delete
+                                        </button>
+                                    </div>
                                 </div>
                             ))}
                         </div>
@@ -1534,6 +1707,10 @@ const AdminDashboard = () => {
             </div>
         );
     };
+
+    // The ManageSectors component is now removed as per user's request.
+    // const ManageSectors = () => { /* ... existing code ... */ };
+
 
     return (
         <div className="page-container admin-dashboard">
@@ -1547,7 +1724,7 @@ const AdminDashboard = () => {
                 <button className={`tab-button ${activeTab === 'participants' ? 'active' : ''}`} onClick={() => setActiveTab('participants')}>Manage Participants</button>
                 <button className={`tab-button ${activeTab === 'results' ? 'active' : ''}`} onClick={() => setActiveTab('results')}>Manage Results</button>
                 <button className={`tab-button ${activeTab === 'leaderboard' ? 'active' : ''}`} onClick={() => setActiveTab('leaderboard')}>Manage Leaderboard</button>
-                <button className={`tab-button ${activeTab === 'sectors' ? 'active' : ''}`} onClick={() => setActiveTab('sectors')}>Manage Sectors</button>
+                <button className={`tab-button ${activeTab === 'stageAdmins' ? 'active' : ''}`} onClick={() => setActiveTab('stageAdmins')}>Manage Stage Admins</button> {/* New tab */}
             </div>
 
             <div className="admin-content">
@@ -1556,7 +1733,7 @@ const AdminDashboard = () => {
                 {activeTab === 'participants' && <ManageParticipants />}
                 {activeTab === 'results' && <ManageResults />}
                 {activeTab === 'leaderboard' && <ManageLeaderboard />}
-                {activeTab === 'sectors' && <ManageSectors />}
+                {activeTab === 'stageAdmins' && <ManageStageAdmins />} {/* Render new component */}
             </div>
         </div>
     );

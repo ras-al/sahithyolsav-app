@@ -18,8 +18,8 @@ const UnifiedLogin = () => {
                 navigate('/admin');
             } else if (userRole === 'judge') {
                 navigate('/judge');
-            } else if (userRole === 'sector') {
-                navigate('/sector');
+            } else if (userRole === 'stage_admin') { // New redirection for stage admin
+                navigate('/stage-admin');
             }
         }
     }, [userRole, loadingAuth, navigate]);

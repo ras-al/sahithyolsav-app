@@ -235,7 +235,7 @@ p {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 4px solid darkgreen; /* Deep red border */
+    border-bottom: 4px solid dar; /* Deep red border */
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
 }
 
@@ -550,7 +550,7 @@ p {
 }
 
 .event-list-card {
-    border-left: 5px solid #C0392B; /* Deep red accent */
+    border-left: 5px solid grey; /* Deep red accent */
 }
 
 .event-list-card .card-actions {
@@ -1206,4 +1206,31 @@ p {
         padding: 10px 20px;
         font-size: 0.9em;
     }
+}
+/* For making the event name bigger */
+.event-participants-group h4{
+    color: #4a69bd; /* Dark green */
+    margin-top: 0;
+    margin-bottom: 15px;
+    border-bottom: 1px dashed #aab7d1;
+    padding-bottom: 8px;
+    font-size: 1.4em; /* Increased font size */
+}
+
+/* For separating the buttons in the participant table */
+.participant-table td .btn {
+    margin-top: 0;
+    margin-right: 50px; /* Increased separation */
+    /* Ensure the last button doesn't have extra margin on the right if it's not needed */
+}
+
+.participant-table td .btn:last-child {
+    margin-right: 0;
+}
+.event-participants-group{
+    margin-bottom: 30px; /* Add some space below each event participants group */
+    padding: 20px;
+    background-color: #f9f9f9; /* Light background for better contrast */
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
 }

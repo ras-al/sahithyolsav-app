@@ -3,6 +3,9 @@
 import React from 'react';
 import { HashRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './AuthContext.jsx';
+import PrivateRoute from './PrivateRoutes.jsx'; // Import PrivateRoute
+
+// Import all components from the src/components directory
 import Navbar from './components/Navbar.jsx';
 import HomePage from './components/HomePage.jsx';
 import ResultsPage from './components/ResultsPage.jsx';
@@ -11,11 +14,11 @@ import InfoPage from './components/InfoPage.jsx';
 import UnifiedLogin from './components/UnifiedLogin.jsx';
 import AdminDashboard from './components/AdminDashboard.jsx';
 import JudgeDashboard from './components/JudgeDashboard.jsx';
-import SectorDashboard from './components/SectorDashboard.jsx';
-import PrivateRoute from './PrivateRoutes.jsx'; // Import PrivateRoute
+import StageAdminDashboard from './components/StageAdminDashboard.jsx';
+import LiveEvents from './components/LiveEvents.jsx'; // Import LiveEvents
 
 // This is where you would import your global CSS file
-import './index.css'; 
+import './index.css';
 
 function App() {
     return (
@@ -28,6 +31,7 @@ function App() {
                     <Route path="/leaderboard" element={<LeaderboardPage />} />
                     <Route path="/info" element={<InfoPage />} />
                     <Route path="/login" element={<UnifiedLogin />} />
+                    <Route path="/live-events" element={<LiveEvents />} /> {/* New route for Live Events */}
 
                     {/* Protected Routes */}
                     <Route path="/admin" element={
@@ -40,9 +44,9 @@ function App() {
                             <JudgeDashboard />
                         </PrivateRoute>
                     } />
-                    <Route path="/sector" element={
-                        <PrivateRoute allowedRoles={['sector']}>
-                            <SectorDashboard />
+                    <Route path="/stage-admin" element={
+                        <PrivateRoute allowedRoles={['stage_admin']}>
+                            <StageAdminDashboard />
                         </PrivateRoute>
                     } />
                     {/* Fallback for unknown routes */}

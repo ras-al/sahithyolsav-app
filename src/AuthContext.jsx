@@ -24,7 +24,7 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 
 // Predefined event categories for the application
-const EVENT_CATEGORIES = ["LP", "UP", "HS", "HSS", "Junior", "Campus", "Senior", "General", "Campus Girls Parallel"]; // Updated categories
+const EVENT_CATEGORIES = ["LP", "UP", "HS", "HSS", "Junior", "Senior", "General", "Campus", "Campus Girls Parallel"];
 
 // Authentication Context
 export const AuthContext = createContext(null);
@@ -34,7 +34,7 @@ export function AuthProvider({ children }) {
     const [loadingAuth, setLoadingAuth] = useState(true);
     const [userId, setUserId] = useState(null);
     const [userRole, setUserRole] = useState(null);
-    const [sectorDetails, setSectorDetails] = useState(null);
+    const [stageDetails, setStageDetails] = useState(null); // New state for stage admin details
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -46,18 +46,19 @@ export function AuthProvider({ children }) {
                 let role = null;
                 if (user.email === 'admin@sahithyolsav.com') {
                     role = 'admin';
-                    setSectorDetails(null);
+                    setStageDetails(null); // Admin doesn't have stage details
                 } else if (user.email && user.email.includes('@judge.com')) {
                     role = 'judge';
-                    setSectorDetails(null);
-                } else if (user.email && user.email.includes('@sector.com')) {
-                    role = 'sector';
-                    const sectorDocRef = doc(db, `artifacts/${appId}/public/data/sectors`, user.uid);
-                    const sectorDocSnap = await getDoc(sectorDocRef);
-                    if (sectorDocSnap.exists()) {
-                        setSectorDetails({ id: sectorDocSnap.id, ...sectorDocSnap.data() });
+                    setStageDetails(null); // Judges don't have stage details
+                } else if (user.email && user.email.includes('@stage.com')) { // New stage admin role
+                    role = 'stage_admin';
+                    const stageDocRef = doc(db, `artifacts/${appId}/public/data/stage_admins`, user.uid);
+                    const stageDocSnap = await getDoc(stageDocRef);
+                    if (stageDocSnap.exists()) {
+                        setStageDetails({ id: stageDocSnap.id, ...stageDocSnap.data() });
                     } else {
-                        setSectorDetails(null);
+                        setStageDetails(null);
+                        console.warn(`Stage admin details not found for UID: ${user.uid}`);
                     }
                 }
                 setUserRole(role);
@@ -65,7 +66,7 @@ export function AuthProvider({ children }) {
                 setCurrentUser(null);
                 setUserId(null);
                 setUserRole(null);
-                setSectorDetails(null);
+                setStageDetails(null);
                 console.log("Auth state changed: No user logged in.");
 
                 if (initialAuthToken) {
@@ -121,8 +122,8 @@ export function AuthProvider({ children }) {
         db,
         auth,
         appId,
-        sectorDetails,
-        EVENT_CATEGORIES // Export EVENT_CATEGORIES
+        stageDetails, // Export stage details
+        EVENT_CATEGORIES
     };
 
     return (
