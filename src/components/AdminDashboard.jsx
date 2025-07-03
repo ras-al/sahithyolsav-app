@@ -81,6 +81,7 @@ const AdminDashboard = () => {
         const [scoresForEvent, setScoresForEvent] = useState([]);
         const [selectedEventForScores, setSelectedEventForScores] = useState(null);
         const [editingEventId, setEditingEventId] = useState(null);
+        const [isPublic, setIsPublic] = useState(false); // New state for public visibility
 
         const handleAddEvent = async (e) => {
             e.preventDefault();
@@ -112,7 +113,8 @@ const AdminDashboard = () => {
                     totalMarks: parseInt(totalMarks),
                     judges: judgesWithNames,
                     markDistribution: judgeMarkDistribution,
-                    status: 'scheduled'
+                    status: 'scheduled',
+                    isPublic: isPublic // Save public visibility status
                 };
 
                 if (editingEventId) {
@@ -133,6 +135,7 @@ const AdminDashboard = () => {
                 setTotalMarks(100);
                 setSelectedJudgeIds([]);
                 setJudgeMarkDistribution({});
+                setIsPublic(false); // Reset public visibility
             } catch (error) {
                 console.error("Error adding/updating event:", error);
                 setMessage("Failed to add/update event: " + error.message);
@@ -151,6 +154,7 @@ const AdminDashboard = () => {
             setTotalMarks(event.totalMarks);
             setSelectedJudgeIds(event.judges?.map(j => j.id) || []);
             setJudgeMarkDistribution(event.markDistribution || {});
+            setIsPublic(event.isPublic || false); // Set public visibility for editing
         };
 
         const handleJudgeSelection = (e) => {
@@ -193,6 +197,18 @@ const AdminDashboard = () => {
             } catch (error) {
                 console.error("Error marking event over:", error);
                 setMessage("Failed to mark event over: " + error.message);
+            }
+        };
+
+        const handleTogglePublic = async (eventId, currentIsPublic) => {
+            setMessage('');
+            try {
+                const eventDocRef = doc(db, `artifacts/${appId}/public/data/events`, eventId);
+                await updateDoc(eventDocRef, { isPublic: !currentIsPublic });
+                setMessage(`Event public visibility toggled to "${!currentIsPublic}"!`);
+            } catch (error) {
+                console.error("Error toggling public status:", error);
+                setMessage("Failed to toggle public status: " + error.message);
             }
         };
 
@@ -460,6 +476,15 @@ const AdminDashboard = () => {
                             })}
                         </div>
                     )}
+                    <div className="form-group checkbox-group">
+                        <input
+                            type="checkbox"
+                            id="isPublic"
+                            checked={isPublic}
+                            onChange={(e) => setIsPublic(e.target.checked)}
+                        />
+                        <label htmlFor="isPublic">Make Publicly Viewable on Homepage</label>
+                    </div>
                     <button type="submit" className="btn btn-primary">{editingEventId ? 'Update Event' : 'Add Event'}</button>
                     {editingEventId && <button type="button" className="btn btn-secondary" onClick={() => {
                         setEditingEventId(null);
@@ -472,6 +497,7 @@ const AdminDashboard = () => {
                         setTotalMarks(100);
                         setSelectedJudgeIds([]);
                         setJudgeMarkDistribution({});
+                        setIsPublic(false); // Reset public visibility
                     }}>Cancel Edit</button>}
                 </form>
 
@@ -493,6 +519,7 @@ const AdminDashboard = () => {
                                             <p>Judges: {event.judges.map(j => j.name).join(', ')}</p>
                                             <p>Mark Dist: {Object.entries(event.markDistribution || {}).map(([jId, marks]) => `${judges.find(j => j.id === jId)?.name || jId}: ${marks}`).join(', ')}</p>
                                             <p>Status: <span className={`event-status ${event.status}`}>{event.status}</span></p>
+                                            <p>Public: <span className={`event-status ${event.isPublic ? 'live' : 'over'}`}>{event.isPublic ? 'Yes' : 'No'}</span></p>
                                             <div className="card-actions">
                                                 <button
                                                     className={`btn ${event.status === 'live' ? 'btn-warn' : 'btn-success'}`}
@@ -506,6 +533,12 @@ const AdminDashboard = () => {
                                                     disabled={event.status === 'over'}
                                                 >
                                                     Mark Over
+                                                </button>
+                                                <button
+                                                    className={`btn ${event.isPublic ? 'btn-danger' : 'btn-info'}`}
+                                                    onClick={() => handleTogglePublic(event.id, event.isPublic)}
+                                                >
+                                                    {event.isPublic ? 'Hide from Public' : 'Make Public'}
                                                 </button>
                                                 <button
                                                     className="btn btn-secondary"

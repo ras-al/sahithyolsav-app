@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../AuthContext.jsx'; // Correct path to AuthContext
 import { MessageBox } from './UtilityComponents.jsx'; // Import MessageBox
-import { collection, onSnapshot } from 'firebase/firestore'; // Import Firestore functions
+import { collection, onSnapshot, query, where } from 'firebase/firestore'; // Import Firestore functions
 
 const HomePage = () => {
     const { db, appId } = useAuth();
@@ -14,13 +14,16 @@ const HomePage = () => {
     useEffect(() => {
         if (!db) return;
 
+        // Query to fetch only public events
         const eventsColRef = collection(db, `artifacts/${appId}/public/data/events`);
-        const unsubscribe = onSnapshot(eventsColRef, (snapshot) => {
+        const q = query(eventsColRef, where('isPublic', '==', true)); // Only show public events
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
             const eventsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setEvents(eventsData);
             setMessage('');
         }, (error) => {
-            console.error("Error fetching events:", error);
+            console.error("Error fetching public events:", error);
             setMessage("Failed to load events. Please try again.");
         });
 
@@ -35,8 +38,8 @@ const HomePage = () => {
 
         if (event.status === 'over') return 'Over';
         if (event.status === 'live') return 'Live Now';
-        if (eventDate < now) return 'Over (Not marked as complete)';
-        if (eventDate > now) return 'Scheduled';
+        if (eventDate < now) return 'Scheduled';
+        if (eventDate > now) return 'Scheduled'; // If future, still scheduled
         return 'Unknown';
     };
 
@@ -45,43 +48,48 @@ const HomePage = () => {
         return event.judges.map(j => j.name).join(', ');
     };
 
+    // Group events by category
+    const eventsByCategory = events.reduce((acc, event) => {
+        const category = event.category || 'Uncategorized';
+        if (!acc[category]) {
+            acc[category] = [];
+        }
+        acc[category].push(event);
+        return acc;
+    }, {});
+
     return (
         <div className="home-page-container">
-            <header className="hero-section">
-                <div className="hero-content">
-                    <h1>Welcome to Sahithyolsav 2025!</h1>
-                    <p className="tagline">Celebrating Culture, Talent, and Unity</p>
-                    <p className="event-dates-location">
-                        Join us on July 15th & 16th, 2025, in Iritty Division!
-                    </p>
-                    <div className="hero-buttons">
-                        <Link to="/results" className="btn btn-primary btn-large">View Results</Link>
-                        <Link to="/leaderboard" className="btn btn-secondary btn-large">See Leaderboard</Link>
-                    </div>
-                </div>
+            <header className="hero-section-image">
+                {/* Banner Image */}
+                <img src="/banner.png" alt="Sahithyolsav 2025 Banner" className="banner-image" />
             </header>
 
             <MessageBox message={message} type={message.includes("Failed") ? 'error' : 'info'} onClose={() => setMessage('')} />
 
             <section className="events-section home-section">
                 <h2>Event Schedule</h2>
-                {events.length === 0 ? (
-                    <p className="no-data-message">No events scheduled yet. Check back soon!</p>
+                {Object.keys(eventsByCategory).length === 0 ? (
+                    <p className="no-data-message">No public events scheduled yet. Check back soon!</p>
                 ) : (
-                    <div className="event-cards-container">
-                        {events.map(event => (
-                            <div key={event.id} className="event-card">
-                                <h3>{event.name}</h3>
-                                <p><strong>Date:</strong> {event.date}</p>
-                                <p><strong>Time:</strong> {event.time}</p>
-                                <p><strong>Location:</strong> {event.location || 'N/A'}</p>
-                                <p><strong>Stage:</strong> {event.stage}</p>
-                                <p><strong>Category:</strong> {event.category}</p>
-                                <p><strong>Status:</strong> <span className={`event-status ${getEventStatus(event).toLowerCase().replace(' (not marked as complete)', '').replace(' ', '-')}`}>{getEventStatus(event)}</span></p>
-                                <p><strong>Judges:</strong> {getJudgesForEvent(event)}</p>
+                    Object.entries(eventsByCategory).map(([category, eventsInCat]) => (
+                        <div key={category} className="event-category-group-homepage">
+                            <h3>Category: {category}</h3>
+                            <div className="event-cards-container">
+                                {eventsInCat.map(event => (
+                                    <div key={event.id} className="event-card">
+                                        <h4>{event.name}</h4>
+                                        <p><strong>Date:</strong> {event.date}</p>
+                                        <p><strong>Time:</strong> {event.time}</p>
+                                        <p><strong>Location:</strong> {event.location || 'N/A'}</p>
+                                        <p><strong>Stage:</strong> {event.stage}</p>
+                                        <p><strong>Status:</strong> <span className={`event-status ${getEventStatus(event).toLowerCase().replace(' (not marked as complete)', '').replace(' ', '-')}`}>{getEventStatus(event)}</span></p>
+                                        <p><strong>Judges:</strong> {getJudgesForEvent(event)}</p>
+                                    </div>
+                                ))}
                             </div>
-                        ))}
-                    </div>
+                        </div>
+                    ))
                 )}
             </section>
 
@@ -94,7 +102,7 @@ const HomePage = () => {
                     bigger and better, with a wide array of competitions and showcases designed to inspire and entertain.
                 </p>
                 <p>
-                    From captivating on-stage performances like music & Khavalis to intricate off-stage competitions
+                    From captivating on-stage performances like Khavali and music to intricate off-stage competitions
                     such as essay writing and painting, Sahithyolsav celebrates every facet of artistic expression.
                     We encourage everyone to participate, cheer for their favorite sectors, and make this event a grand success!
                 </p>
@@ -104,9 +112,9 @@ const HomePage = () => {
                 <h2>Get in Touch</h2>
                 <p>Have questions or need assistance? Reach out to us!</p>
                 <ul>
-                    <li><strong>Email:</strong> irittyduvision@sahithyolsav.com</li>
-                    <li><strong>Phone:</strong> +91 XXXXXXXX</li>
-                    <li><strong>Address:</strong> Students Center, Iritty Division, Kerala</li>
+                    <li><strong>Email:</strong> info@sahithyolsav.com</li>
+                    <li><strong>Phone:</strong> +91 98765 43210</li>
+                    <li><strong>Address:</strong> Cultural Event Grounds, Iritty Division, Kerala</li>
                 </ul>
                 <p>For more details, visit our <Link to="/info" className="text-link">Information Page</Link>.</p>
             </section>
