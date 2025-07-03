@@ -24,7 +24,7 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 
 // Predefined event categories for the application
-const EVENT_CATEGORIES = ["LP", "UP", "HS", "HSS", "Junior", "Campus", "Senior", "General", "Campus Girls"]; // Updated categories
+const EVENT_CATEGORIES = ["LP", "UP", "HS", "HSS", "Junior", "Campus", "Senior", "General", "Campus Girls Parallel"]; // Updated categories
 
 // Authentication Context
 export const AuthContext = createContext(null);
