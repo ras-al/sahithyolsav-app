@@ -11,12 +11,12 @@ import * as XLSX from 'xlsx'; // Import xlsx library
 // Define point schemes for leaderboard based on rank
 const RANK_POINT_SCHEMES = {
     group: {
-        name: "Group Competition (10/8/5)",
-        points: { 1: 10, 2: 8, 3: 5 }
+        name: "Group Competition (8/5/3)",
+        points: { 1: 8, 2: 5, 3: 3 } // Updated points for group competition
     },
     single: {
         name: "Single Competition (5/3/1)",
-        points: { 1: 5, 2: 3, 1: 1 } // Corrected: 3rd place should be 1 point
+        points: { 1: 5, 2: 3, 3: 1 } // Updated points for single competition
     }
 };
 
@@ -234,16 +234,16 @@ const AdminDashboard = () => {
             }));
         };
 
-        // Modified handleSetEventStatus to allow setting scheduled, live, or over
-        const handleSetEventStatus = async (eventId, newStatus) => {
+        // New function to set event status to 'scheduled'
+        const handleSetEventToScheduled = async (eventId) => {
             setMessage('');
             try {
                 const eventDocRef = doc(db, `artifacts/${appId}/public/data/events`, eventId);
-                await updateDoc(eventDocRef, { status: newStatus });
-                setMessage(`Event status updated to "${newStatus}"!`);
+                await updateDoc(eventDocRef, { status: 'scheduled' });
+                setMessage("Event status updated to 'scheduled'!");
             } catch (error) {
-                console.error("Error updating event status:", error);
-                setMessage("Failed to update event status: " + error.message);
+                console.error("Error setting event to scheduled:", error);
+                setMessage("Failed to set event to scheduled: " + error.message);
             }
         };
 
@@ -565,29 +565,15 @@ const AdminDashboard = () => {
                                             <p>Status: <span className={`event-status ${event.status}`}>{event.status}</span></p>
                                             <p>Public: <span className={`event-status ${event.isPublic ? 'live' : 'over'}`}>{event.isPublic ? 'Yes' : 'No'}</span></p>
                                             <div className="card-actions">
-                                                {/* Status buttons */}
+                                                {/* New: Set Scheduled button */}
                                                 <button
-                                                    className={`btn ${event.status === 'scheduled' ? 'btn-primary' : 'btn-outline-primary'}`}
-                                                    onClick={() => handleSetEventStatus(event.id, 'scheduled')}
+                                                    className="btn btn-secondary"
+                                                    onClick={() => handleSetEventToScheduled(event.id)}
                                                     disabled={event.status === 'scheduled'}
                                                 >
-                                                    Scheduled
+                                                    Set Scheduled
                                                 </button>
-                                                <button
-                                                    className={`btn ${event.status === 'live' ? 'btn-success' : 'btn-outline-success'}`}
-                                                    onClick={() => handleSetEventStatus(event.id, 'live')}
-                                                    disabled={event.status === 'live'}
-                                                >
-                                                    Live
-                                                </button>
-                                                <button
-                                                    className={`btn ${event.status === 'over' ? 'btn-warn' : 'btn-outline-warn'}`}
-                                                    onClick={() => handleSetEventStatus(event.id, 'over')}
-                                                    disabled={event.status === 'over'}
-                                                >
-                                                    Over
-                                                </button>
-
+                                                {/* Removed Set Live/Set Over buttons - now handled by Stage Admin */}
                                                 <button
                                                     className={`btn ${event.isPublic ? 'btn-danger' : 'btn-info'}`}
                                                     onClick={() => handleTogglePublic(event.id, event.isPublic)}
@@ -737,7 +723,7 @@ const AdminDashboard = () => {
                         <input type="text" value={judgeName} onChange={(e) => setJudgeName(e.target.value)} required />
                     </div>
                     <div className="form-group">
-                        <label>Judge Email (Unique ID, e.g., judge1@sahithyolsav.com):</label>
+                        <label>Judge Email (Unique ID, e.g., judge1@judge.com):</label>
                         <input type="email" value={judgeEmail} onChange={(e) => setJudgeEmail(e.target.value)} required />
                     </div>
                     {!editingJudgeId && (
@@ -912,7 +898,7 @@ const AdminDashboard = () => {
                     const data = new Uint8Array(e.target.result);
                     const workbook = XLSX.read(data, { type: 'array' });
                     const sheetName = workbook.SheetNames[0];
-                    const worksheet = workbook.Sheets[sheetName];
+                    const worksheet = XLSX.Sheets[sheetName];
                     const json = XLSX.utils.sheet_to_json(worksheet);
 
                     if (!json || json.length === 0) {
@@ -1461,38 +1447,8 @@ const AdminDashboard = () => {
     };
 
     const ManageLeaderboard = () => {
-        const [activePointSchemeId, setActivePointSchemeId] = useState('group');
-        const [settingMessage, setSettingMessage] = useState('');
-
-        useEffect(() => {
-            if (!db) return;
-            const pointsSchemeDocRef = doc(db, `artifacts/${appId}/public/data/settings`, 'leaderboard_point_scheme');
-            const unsubscribe = onSnapshot(pointsSchemeDocRef, (docSnap) => {
-                if (docSnap.exists()) {
-                    setActivePointSchemeId(docSnap.data().activeSchemeId);
-                } else {
-                    setDoc(pointsSchemeDocRef, { activeSchemeId: 'group' }, { merge: true });
-                    setActivePointSchemeId('group');
-                }
-            }, (error) => {
-                console.error("Error fetching point scheme:", error);
-                setSettingMessage("Failed to load point scheme. Defaulting to Group Points.");
-            });
-            return () => unsubscribe();
-        }, [db, appId]);
-
-        const handlePointSchemeChange = async (schemeId) => {
-            setSettingMessage('');
-            try {
-                const pointsSchemeDocRef = doc(db, `artifacts/${appId}/public/data/settings`, 'leaderboard_point_scheme');
-                await setDoc(pointsSchemeDocRef, { activeSchemeId: schemeId }, { merge: true });
-                setActivePointSchemeId(schemeId);
-                setSettingMessage(`Leaderboard point scheme set to: ${RANK_POINT_SCHEMES[schemeId].name}`);
-            } catch (error) {
-                console.error("Error setting point scheme:", error);
-                setSettingMessage("Failed to set point scheme: " + error.message);
-            }
-        };
+        // The point scheme selection is removed as requested.
+        // The recalculate button remains.
 
         const handleRecalculateLeaderboard = async () => {
             setMessage('Recalculating leaderboard...');
@@ -1550,25 +1506,6 @@ const AdminDashboard = () => {
         return (
             <div className="admin-section">
                 <h3>Manage Leaderboard</h3>
-                <div className="form-card" style={{ textAlign: 'center' }}>
-                    <h4>Leaderboard Point System</h4>
-                    <p>Select the point scheme to apply for 1st, 2nd, and 3rd place in events.</p>
-                    <div className="form-group" style={{ display: 'flex', justifyContent: 'center', gap: '20px', marginBottom: '20px' }}>
-                        {Object.entries(RANK_POINT_SCHEMES).map(([key, scheme]) => (
-                            <label key={key}>
-                                <input
-                                    type="radio"
-                                    name="pointScheme"
-                                    value={key}
-                                    checked={activePointSchemeId === key}
-                                    onChange={() => handlePointSchemeChange(key)}
-                                />
-                                {scheme.name}
-                            </label>
-                        ))}
-                    </div>
-                    <MessageBox message={settingMessage} type={settingMessage.includes("Failed") || settingMessage.includes("Error") ? 'error' : 'success'} onClose={() => setSettingMessage('')} />
-                </div>
                 <div className="form-card" style={{ textAlign: 'center', marginTop: '20px' }}>
                     <h4>Recalculate Sector Leaderboard</h4>
                     <p>Click the button below to recalculate the overall sector leaderboard based on current event rank points.</p>
@@ -1658,7 +1595,7 @@ const AdminDashboard = () => {
                 <form onSubmit={handleAddStageAdmin} className="form-card">
                     <h4>{editingStageAdminId ? 'Edit Stage Admin' : 'Add New Stage Admin'}</h4>
                     <div className="form-group">
-                        <label>Stage Name (e.g., Stage 1, Stage 2, Off Stage):</label>
+                        <label>Stage Name (e.g., Stage 1, Stage 2):</label>
                         <input type="text" value={stageName} onChange={(e) => setStageName(e.target.value)} required />
                         <small>This will be used to create the login email (e.g., 'Stage 1' will be 'stage1@stage.com').</small>
                     </div>

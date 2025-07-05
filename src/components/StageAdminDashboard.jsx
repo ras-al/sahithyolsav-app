@@ -11,6 +11,8 @@ const StageDashboard = () => {
     const [assignedStage, setAssignedStage] = useState(null);
     const [events, setEvents] = useState([]);
     const [participants, setParticipants] = useState([]); // All participants for lookup
+    // New state to manage participant codes in the input fields
+    const [participantCodes, setParticipantCodes] = useState({});
 
     // Determine the assigned stage for the current stage admin
     useEffect(() => {
@@ -19,7 +21,11 @@ const StageDashboard = () => {
         // Extract stage name from email (e.g., "stage1@stage.com" -> "Stage 1")
         const emailParts = currentUser.email.split('@');
         if (emailParts.length === 2 && emailParts[1] === 'stage.com') {
-            const stageNameFromEmail = emailParts[0].replace(/([a-z])([0-9])/g, '$1 $2').split(/(?=[A-Z])/).map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+            // Convert "stage1" to "Stage 1", "offstage" to "Off Stage"
+            let stageNameFromEmail = emailParts[0].replace(/([a-z])([0-9])/g, '$1 $2').split(/(?=[A-Z])/).map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+            if (stageNameFromEmail.toLowerCase() === 'offstage') {
+                stageNameFromEmail = 'Off Stage';
+            }
             setAssignedStage(stageNameFromEmail);
         } else {
             setMessage("Error: You are not authorized as a Stage Admin.");
@@ -51,7 +57,20 @@ const StageDashboard = () => {
         if (!db) return;
 
         const unsubscribe = onSnapshot(collection(db, `artifacts/${appId}/public/data/participants`), (snapshot) => {
-            setParticipants(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            const fetchedParticipants = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setParticipants(fetchedParticipants);
+
+            // Initialize participantCodes state from fetched data
+            const initialCodes = {};
+            fetchedParticipants.forEach(p => {
+                p.events?.forEach(eventEntry => {
+                    if (eventEntry.code) {
+                        initialCodes[`${p.id}-${eventEntry.eventId}`] = eventEntry.code;
+                    }
+                });
+            });
+            setParticipantCodes(initialCodes);
+
         }, (error) => console.error("Error fetching participants:", error));
 
         return () => unsubscribe();
@@ -71,6 +90,10 @@ const StageDashboard = () => {
 
     const handleUpdateParticipantCode = async (participantId, eventId, newCode) => {
         setMessage('');
+        if (!newCode.trim()) {
+            setMessage("Participant code cannot be empty.");
+            return;
+        }
         try {
             const participantRef = doc(db, `artifacts/${appId}/public/data/participants`, participantId);
             const participantSnap = await getDoc(participantRef);
@@ -134,11 +157,10 @@ const StageDashboard = () => {
                                     >
                                         Set Over
                                     </button>
-                                    {/* Add button to view participants and assign codes */}
                                 </div>
 
                                 <div className="event-participants-group">
-                                    <h5>Participants for {event.name}</h5>
+                                    <h6>Participants for {event.name}</h6>
                                     <table className="participant-table">
                                         <thead>
                                             <tr>
@@ -156,6 +178,8 @@ const StageDashboard = () => {
                                                 .map(participant => {
                                                     const eventEntry = participant.events.find(e => e.eventId === event.id);
                                                     const currentCode = eventEntry ? eventEntry.code : '';
+                                                    const inputKey = `${participant.id}-${event.id}`;
+
                                                     return (
                                                         <tr key={participant.id}>
                                                             <td>{participant.name}</td>
@@ -166,28 +190,19 @@ const StageDashboard = () => {
                                                             <td>
                                                                 <input
                                                                     type="text"
-                                                                    value={currentCode}
-                                                                    onChange={(e) => {
-                                                                        // This is a controlled component, but we need to update state
-                                                                        // for the specific participant's event code.
-                                                                        // For simplicity, we'll update on button click.
-                                                                        // For real-time typing feedback, you'd need a more complex state management
-                                                                        // for participant codes within this component.
-                                                                    }}
-                                                                    id={`code-${participant.id}-${event.id}`}
-                                                                    placeholder="Enter Code"
+                                                                    value={participantCodes[inputKey] !== undefined ? participantCodes[inputKey] : currentCode}
+                                                                    onChange={(e) => setParticipantCodes(prev => ({
+                                                                        ...prev,
+                                                                        [inputKey]: e.target.value
+                                                                    }))}
+                                                                    placeholder="Code"
                                                                     style={{ width: '60px', textTransform: 'uppercase', textAlign: 'center' }}
                                                                 />
                                                             </td>
                                                             <td>
                                                                 <button
                                                                     className="btn btn-primary btn-small"
-                                                                    onClick={() => {
-                                                                        const inputElement = document.getElementById(`code-${participant.id}-${event.id}`);
-                                                                        if (inputElement) {
-                                                                            handleUpdateParticipantCode(participant.id, event.id, inputElement.value);
-                                                                        }
-                                                                    }}
+                                                                    onClick={() => handleUpdateParticipantCode(participant.id, event.id, participantCodes[inputKey] || currentCode)}
                                                                 >
                                                                     Update Code
                                                                 </button>
