@@ -1234,3 +1234,102 @@ p {
     border-radius: 10px;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
 }
+/* Stage Admin Participant Table Styling */
+.stage-admin-dashboard .participant-table {
+    width: 100%;
+    border-collapse: separate; /* Use separate to allow border-radius on cells */
+    border-spacing: 0; /* Remove space between cells */
+    margin-top: 20px;
+    border-radius: 12px; /* Apply border-radius to the table */
+    overflow: hidden; /* Ensures content respects border-radius */
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    background-color: #fff;
+}
+
+.stage-admin-dashboard .participant-table th,
+.stage-admin-dashboard .participant-table td {
+    padding: 15px;
+    text-align: left;
+    border-bottom: 1px solid #e0e0e0;
+    border-right: 1px solid #e0e0e0; /* Add right border for cell separation */
+}
+
+.stage-admin-dashboard .participant-table th:last-child,
+.stage-admin-dashboard .participant-table td:last-child {
+    border-right: none; /* Remove right border for the last column */
+}
+
+.stage-admin-dashboard .participant-table thead th {
+    background-color: #213B2A; /* Dark green */
+    color: white;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.9em;
+    letter-spacing: 0.5px;
+    position: sticky; /* Make header sticky */
+    top: 0; /* Stick to the top */
+    z-index: 10; /* Ensure it's above other content */
+}
+
+.stage-admin-dashboard .participant-table tbody tr:nth-child(even) {
+    background-color: #F8F5ED; /* Light beige for even rows */
+}
+
+.stage-admin-dashboard .participant-table tbody tr:hover {
+    background-color: #F0EADF; /* Slightly darker beige on hover */
+    transition: background-color 0.3s ease;
+}
+
+.stage-admin-dashboard .participant-table td input[type="text"].disabled-input {
+    background-color: #f5f5f5; /* Lighter background for disabled input */
+    border: 1px solid #dcdcdc; /* Subtle border */
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-weight: bold;
+    color: #213B2A; /* Dark green text */
+    text-shadow: 0 1px 1px rgba(0,0,0,0.05); /* Subtle text shadow */
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.1); /* Inner shadow */
+    transition: all 0.2s ease-in-out;
+}
+
+.stage-admin-dashboard .participant-table td input[type="text"].disabled-input:focus {
+    box-shadow: inset 0 1px 3px rgba(0,0,0,0.1), 0 0 0 3px rgba(192, 57, 43, 0.2); /* Focus glow */
+}
+
+/* Added for overall table container to allow scrolling if needed */
+.stage-admin-dashboard .table-container {
+    max-height: 400px; /* Example max height, adjust as needed */
+    overflow-y: auto; /* Enable vertical scrolling */
+    margin-top: 20px;
+    border: 1px solid #e0e0e0; /* Border around the scrollable area */
+    border-radius: 12px;
+}
+
+/* Ensure the flex centering works for the main dashboard content */
+.stage-admin-dashboard {
+    display: flex;
+    flex-direction: column;
+    align-items: center; /* Center items horizontally */
+}
+
+.stage-admin-dashboard .form-group,
+.stage-admin-dashboard .selected-event-info.card,
+.stage-admin-dashboard .participants-for-event.admin-section {
+    width: 100%; /* Take full width of parent */
+    max-width: 700px; /* Limit max width for readability */
+    margin-left: auto;
+    margin-right: auto;
+    box-sizing: border-box; /* Include padding in width */
+}
+
+/* Adjustments for smaller screens */
+@media (max-width: 600px) {
+    .stage-admin-dashboard .participant-table th,
+    .stage-admin-dashboard .participant-table td {
+        padding: 10px; /* Reduce padding on smaller screens */
+    }
+    .stage-admin-dashboard .participant-table td input[type="text"].disabled-input {
+        width: 45px; /* Adjust input width */
+        font-size: 0.9em;
+    }
+}

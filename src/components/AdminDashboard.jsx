@@ -897,8 +897,16 @@ const AdminDashboard = () => {
                 try {
                     const data = new Uint8Array(e.target.result);
                     const workbook = XLSX.read(data, { type: 'array' });
+
+                    // --- Start of edited part ---
+                    if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
+                        setMessage("Excel file has no sheets or could not be read.");
+                        return;
+                    }
+                    // --- End of edited part ---
+
                     const sheetName = workbook.SheetNames[0];
-                    const worksheet = XLSX.Sheets[sheetName];
+                    const worksheet = workbook.Sheets[sheetName];
                     const json = XLSX.utils.sheet_to_json(worksheet);
 
                     if (!json || json.length === 0) {
