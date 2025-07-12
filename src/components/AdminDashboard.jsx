@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext.jsx'; // Correct path to AuthContext
 import { MessageBox, Modal } from './UtilityComponents.jsx'; // Import utility components
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs, setDoc, writeBatch, getDoc } from 'firebase/firestore'; // Import writeBatch and getDoc
-import { createUserWithEmailAndPassword } from 'firebase/auth'; // Explicitly import createUserWithEmailAndPassword
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth'; // Explicitly import createUserWithEmailAndPassword and signInWithEmailAndPassword
 import * as XLSX from 'xlsx'; // Import xlsx library
 
 // Define point schemes for leaderboard based on rank
@@ -131,6 +131,14 @@ const AdminDashboard = () => {
         const [editingEventId, setEditingEventId] = useState(null);
         const [isPublic, setIsPublic] = useState(false); // New state for public visibility
         const [eventSearchTerm, setEventSearchTerm] = useState(''); // New state for event search
+
+        // State for Reset Event Modal
+        const [isResetModalOpen, setIsResetModalOpen] = useState(false);
+        const [resetEventId, setResetEventId] = useState(null);
+        const [resetEventName, setResetEventName] = useState('');
+        const [adminPassword, setAdminPassword] = useState('');
+        const [resetMessage, setResetMessage] = useState('');
+
 
         const handleAddEvent = async (e) => {
             e.preventDefault();
@@ -283,7 +291,16 @@ const AdminDashboard = () => {
                 const scoresSnapshot = await getDocs(scoresQuery);
                 const fetchedScores = scoresSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-                const enrichedScores = fetchedScores.map(score => {
+                // Process scores to get only the latest submission per participant per judge
+                const latestScores = {};
+                fetchedScores.forEach(score => {
+                    const key = `${score.participantId}-${score.judgeId}`;
+                    if (!latestScores[key] || new Date(score.timestamp) > new Date(latestScores[key].timestamp)) {
+                        latestScores[key] = score;
+                    }
+                });
+
+                const enrichedScores = Object.values(latestScores).map(score => {
                     const participant = participants.find(p => p.id === score.participantId);
                     const judge = judges.find(j => j.id === score.judgeId);
                     return {
@@ -321,8 +338,19 @@ const AdminDashboard = () => {
                 const scoresSnapshot = await getDocs(scoresQuery);
                 const scoresData = scoresSnapshot.docs.map(doc => doc.data());
 
-                const participantTotalScores = {};
+                // Process scores to get only the latest submission per participant per judge
+                const latestScoresForRanking = {};
                 scoresData.forEach(score => {
+                    const key = `${score.participantId}-${score.judgeId}`;
+                    if (!latestScoresForRanking[key] || new Date(score.timestamp) > new Date(latestScoresForRanking[key].timestamp)) {
+                        latestScoresForRanking[key] = score;
+                    }
+                });
+                const processedScores = Object.values(latestScoresForRanking);
+
+
+                const participantTotalScores = {};
+                processedScores.forEach(score => {
                     if (participantTotalScores[score.participantId]) {
                         participantTotalScores[score.participantId] += score.marks;
                     } else {
@@ -379,27 +407,81 @@ const AdminDashboard = () => {
             }
         };
 
-        const handleDownloadPoster = (base64Data, eventName) => {
-            setMessage('');
-            if (!base64Data) {
-                setMessage("No poster available for this event.");
+        const handleOpenResetModal = (eventId, eventName) => {
+            setResetEventId(eventId);
+            setResetEventName(eventName);
+            setAdminPassword(''); // Clear password field
+            setResetMessage(''); // Clear any previous reset messages
+            setIsResetModalOpen(true);
+        };
+
+        const handleConfirmReset = async () => {
+            setResetMessage('');
+            if (!adminPassword) {
+                setResetMessage("Please enter your admin password.");
                 return;
             }
-            try {
-                const mimeTypeMatch = base64Data.match(/^data:(.*?);base64,/);
-                const mimeType = mimeTypeMatch ? mimeTypeMatch[1] : 'image/png';
-                const fileExtension = mimeType.split('/')[1] || 'png';
+            if (!currentUser || currentUser.email !== 'admin@sahithyolsav.com') {
+                setResetMessage("You are not authorized to perform this action.");
+                return;
+            }
 
-                const link = document.createElement('a');
-                link.href = base64Data;
-                link.download = `${eventName.replace(/[^a-zA-Z0-9]/g, '_')}_Poster.${fileExtension}`;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                setMessage(`Poster for "${eventName}" downloaded successfully!`);
+            try {
+                // Re-authenticate the admin user
+                await signInWithEmailAndPassword(auth, currentUser.email, adminPassword);
+
+                // Start batch operation
+                const batch = writeBatch(db);
+
+                // 1. Delete all scores for this event
+                const scoresQuery = query(
+                    collection(db, `artifacts/${appId}/public/data/scores`),
+                    where('eventId', '==', resetEventId)
+                );
+                const scoresSnapshot = await getDocs(scoresQuery);
+                scoresSnapshot.docs.forEach(doc => {
+                    batch.delete(doc.ref);
+                });
+
+                // 2. Delete all event_rank_points for this event
+                const rankPointsQuery = query(
+                    collection(db, `artifacts/${appId}/public/data/event_rank_points`),
+                    where('eventId', '==', resetEventId)
+                );
+                const rankPointsSnapshot = await getDocs(rankPointsQuery);
+                rankPointsSnapshot.docs.forEach(doc => {
+                    batch.delete(doc.ref);
+                });
+
+                // 3. Delete any existing results for this event
+                const resultsQuery = query(
+                    collection(db, `artifacts/${appId}/public/data/results`),
+                    where('eventId', '==', resetEventId)
+                );
+                const resultsSnapshot = await getDocs(resultsQuery);
+                resultsSnapshot.docs.forEach(doc => {
+                    batch.delete(doc.ref);
+                });
+
+                // 4. Update the event status to 'scheduled'
+                const eventDocRef = doc(db, `artifacts/${appId}/public/data/events`, resetEventId);
+                batch.update(eventDocRef, { status: 'scheduled' });
+
+                // Commit the batch
+                await batch.commit();
+
+                setResetMessage(`Event "${resetEventName}" successfully reset! All scores, ranks, and results cleared, and event status set to 'scheduled'.`);
+                setMessage(`Event "${resetEventName}" successfully reset!`);
+                setIsResetModalOpen(false);
             } catch (error) {
-                console.error("Error downloading poster:", error);
-                setMessage("Failed to download poster: " + error.message);
+                console.error("Error resetting event:", error);
+                let errorMessage = "Failed to reset event. ";
+                if (error.code === 'auth/wrong-password' || error.code === 'auth/invalid-credential') {
+                    errorMessage += "Incorrect admin password.";
+                } else {
+                    errorMessage += error.message;
+                }
+                setResetMessage(errorMessage);
             }
         };
 
@@ -605,12 +687,12 @@ const AdminDashboard = () => {
                                                 >
                                                     Process Event Ranks
                                                 </button>
+                                                {/* Replaced Download Poster with Reset Event */}
                                                 <button
-                                                    className="btn btn-info btn-small"
-                                                    onClick={() => handleDownloadPoster(event.posterBase64, event.name)}
-                                                    disabled={!event.posterBase64}
+                                                    className="btn btn-warn btn-small"
+                                                    onClick={() => handleOpenResetModal(event.id, event.name)}
                                                 >
-                                                    Download Poster
+                                                    Reset Event
                                                 </button>
                                             </div>
                                         </div>
@@ -643,13 +725,45 @@ const AdminDashboard = () => {
                                     <tr key={score.id}>
                                         <td>{score.participantName}</td>
                                         <td>{score.judgeName}</td>
-                                        <td>{score.marks}</td>
+                                        <td>{score.marks}</td> {/* Display marks */}
                                         <td>{new Date(score.timestamp).toLocaleString()}</td>
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
                     )}
+                </Modal>
+
+                {/* Reset Event Confirmation Modal */}
+                <Modal
+                    isOpen={isResetModalOpen}
+                    onClose={() => setIsResetModalOpen(false)}
+                    title={`Reset Event: ${resetEventName}`}
+                >
+                    <p className="warn-message">
+                        Are you absolutely sure you want to reset this event?
+                        This will permanently delete ALL scores, ranks, and results for "{resetEventName}"
+                        and set its status back to 'scheduled'. This action cannot be undone.
+                    </p>
+                    <div className="form-group">
+                        <label htmlFor="adminPassword">Enter Admin Password to Confirm:</label>
+                        <input
+                            type="password"
+                            id="adminPassword"
+                            value={adminPassword}
+                            onChange={(e) => setAdminPassword(e.target.value)}
+                            required
+                        />
+                    </div>
+                    {resetMessage && <MessageBox message={resetMessage} type="error" onClose={() => setResetMessage('')} />}
+                    <div className="card-actions" style={{ justifyContent: 'center', marginTop: '20px' }}>
+                        <button className="btn btn-danger" onClick={handleConfirmReset}>
+                            Confirm Reset
+                        </button>
+                        <button className="btn btn-secondary" onClick={() => setIsResetModalOpen(false)}>
+                            Cancel
+                        </button>
+                    </div>
                 </Modal>
             </div>
         );
@@ -688,7 +802,11 @@ const AdminDashboard = () => {
                 setJudgePassword('');
             } catch (error) {
                 console.error("Error adding/updating judge:", error);
-                setMessage("Failed to add/update judge: " + error.message);
+                let errorMessage = "Failed to add/update judge: " + error.message;
+                if (error.code === 'auth/email-already-in-use') {
+                    errorMessage = `Failed to add judge: An account with email ${judgeEmail} already exists.`;
+                }
+                setMessage(errorMessage);
             }
         };
 
@@ -898,12 +1016,10 @@ const AdminDashboard = () => {
                     const data = new Uint8Array(e.target.result);
                     const workbook = XLSX.read(data, { type: 'array' });
 
-                    // --- Start of edited part ---
                     if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
                         setMessage("Excel file has no sheets or could not be read.");
                         return;
                     }
-                    // --- End of edited part ---
 
                     const sheetName = workbook.SheetNames[0];
                     const worksheet = workbook.Sheets[sheetName];
@@ -1164,6 +1280,7 @@ const AdminDashboard = () => {
                                                                             participant.events?.find(e => e.eventId === eventId)?.code || 'N/A'
                                                                         }
                                                                         disabled
+                                                                        className="disabled-input"
                                                                         style={{ width: '50px', textTransform: 'uppercase', textAlign: 'center' }}
                                                                     />
                                                                 </td>
