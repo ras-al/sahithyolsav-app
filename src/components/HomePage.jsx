@@ -1,18 +1,17 @@
 // Path: src/components/HomePage.jsx
-// This component is extracted from the main App.jsx for clarity.
 
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../AuthContext.jsx'; // Assuming AuthContext is in a separate file
-import { MessageBox } from './UtilityComponents.jsx'; // Assuming UtilityComponents are in a separate file
+import { useAuth } from '../AuthContext.jsx'; // Correct path to AuthContext
+import { MessageBox } from './UtilityComponents.jsx'; // Import MessageBox
 import { collection, onSnapshot, query, where } from 'firebase/firestore'; // Import Firestore functions
+import themeImage from '/banner.png'; // Import the theme image for the banner
 
 const HomePage = () => {
     const { db, appId } = useAuth();
     const [events, setEvents] = useState([]);
     const [message, setMessage] = useState('');
 
-    // Fetch events from Firestore
     useEffect(() => {
         if (!db) return;
 
@@ -29,11 +28,9 @@ const HomePage = () => {
             setMessage("Failed to load events. Please try again.");
         });
 
-        // Cleanup listener on component unmount
         return () => unsubscribe();
     }, [db, appId]);
 
-    // Determine event status based on current time and event data
     const getEventStatus = (event) => {
         const eventDate = new Date(event.date);
         const eventTimeParts = event.time.split(':');
@@ -42,13 +39,11 @@ const HomePage = () => {
 
         if (event.status === 'over') return 'Over';
         if (event.status === 'live') return 'Live Now';
-        // If the event's scheduled time has passed but it's not marked 'live' or 'over'
         if (eventDate < now) return 'Scheduled';
         if (eventDate > now) return 'Scheduled'; // If future, still scheduled
         return 'Unknown';
     };
 
-    // Format judges' names for display
     const getJudgesForEvent = (event) => {
         if (!event.judges || event.judges.length === 0) return 'No judges assigned yet.';
         return event.judges.map(j => j.name).join(', ');
@@ -66,69 +61,69 @@ const HomePage = () => {
 
     return (
         <div className="home-page-container">
-            {/* Hero Section with Event Title and Call to Actions */}
             <header className="hero-section-image">
-                {/* Banner Image */}
-                <img src="/banner.png" alt="Sahithyolsav 2025 Banner" className="banner-image" />
+                <img src={themeImage} alt="Sahithyolsav Banner" className="banner-image" />
+                <div className="hero-content">
+                    {/* You can add text content here if you want it overlaid on the image */}
+                    {/* <h1>Sahithyolsav 2025</h1> */}
+                    {/* <p className="tagline">Feel the Experience</p> */}
+                    {/* <p className="event-dates-location">March 15-17, 2025 | Iritty Division</p> */}
+                </div>
             </header>
 
             <MessageBox message={message} type={message.includes("Failed") ? 'error' : 'info'} onClose={() => setMessage('')} />
 
-            {/* Event Schedule Section */}
             <section className="events-section home-section">
                 <h2>Event Schedule</h2>
                 {Object.keys(eventsByCategory).length === 0 ? (
                     <p className="no-data-message">No public events scheduled yet. Check back soon!</p>
                 ) : (
-                    <div className="event-cards-container">
-                        {Object.entries(eventsByCategory).map(([category, eventsInCat]) => (
-                            <div key={category} className="event-category-group-homepage">
-                                <h3>Category: {category}</h3>
-                                <div className="event-cards-container">
-                                    {eventsInCat.map(event => (
-                                        <div key={event.id} className="event-card">
-                                            <h4>{event.name}</h4>
-                                            <p><strong>Date:</strong> {event.date}</p>
-                                            <p><strong>Time:</strong> {event.time}</p>
-            
-                                            <p><strong>Stage:</strong> {event.stage}</p>
-                                            <p><strong>Category:</strong> {event.category}</p>
-                                            
-                                            <p><strong>Status:</strong> <span className={`event-status ${getEventStatus(event).toLowerCase().replace(' (not marked as complete)', '').replace(' ', '-')}`}>{getEventStatus(event)}</span></p>
-                                            <p><strong>Judges:</strong> {getJudgesForEvent(event)}</p>
-                                        </div>
-                                    ))}
-                                </div>
+                    Object.entries(eventsByCategory).map(([category, eventsInCat]) => (
+                        <div key={category} className="event-category-group-homepage">
+                            <h3>Category: {category}</h3>
+                            <div className="event-cards-container">
+                                {eventsInCat.map(event => (
+                                    <div key={event.id} className="event-card">
+                                        <h4>{event.name}</h4>
+                                        <p><strong>Date:</strong> {event.date}</p>
+                                        <p><strong>Time:</strong> {event.time}</p>
+                                        <p><strong>Location:</strong> {event.location || 'N/A'}</p>
+                                        <p><strong>Stage:</strong> {event.stage}</p>
+                                        <p><strong>Status:</strong> <span className={`event-status ${getEventStatus(event).toLowerCase().replace(' (not marked as complete)', '').replace(' ', '-')}`}>{getEventStatus(event)}</span></p>
+                                        <p><strong>Judges:</strong> {getJudgesForEvent(event)}</p>
+                                    </div>
+                                ))}
                             </div>
-                        ))}
-                    </div>
+                        </div>
+                    ))
                 )}
             </section>
 
-            {/* About Section */}
             <section className="about-section home-section">
                 <h2>About Sahithyolsav</h2>
                 <p>
-                    Sahithyolsav is an annual cultural extravaganza bringing together artists, writers, and performers
-                    from all age groups and sectors within the Iritty Division. Our aim is to foster creativity, promote
-                    cultural exchange, and provide a platform for budding talents. This year's event promises to be
-                    bigger and better, with a wide array of competitions and showcases designed to inspire and entertain.
+                    Sahithyolsav—Kerala’s beloved festival of 
+                    literature—returns in all its glory with the 32nd 
+                    edition under the Iritty Division, set against the 
+                    serene backdrop of Vallithode on July 19–20, 2025.
                 </p>
                 <p>
-                    From captivating on-stage performances like Khavali and music to intricate off-stage competitions
-                    such as essay writing and painting, Sahithyolsav celebrates every facet of artistic expression.
-                    We encourage everyone to participate, cheer for their favorite sectors, and make this event a grand success!
+                    This year’s theme, “അനുഭവങ്ങളുടെ കല – Feel the Experience,” 
+                    invites us to explore literature not just as written word, but as living emotion, shared memory, and creative reflection. Every poem, every story, every dialogue becomes a brushstroke in the grand canvas of human experience.
+                </p>
+                <p>
+                    This 32nd edition is more than an event—it is an invitation to feel, to reflect, and to express. Whether you are a budding writer, a curious student, a passionate reader, or a cultural enthusiast, 
+                    Sahithyolsav promises two days of literary immersion, creative awakening, and unforgettable moments.
                 </p>
             </section>
 
-            {/* Contact Information Section */}
             <section className="contact-info-section home-section">
                 <h2>Get in Touch</h2>
                 <p>Have questions or need assistance? Reach out to us!</p>
                 <ul>
                     <li><strong>Email:</strong> info@sahithyolsav.com</li>
-                    <li><strong>Phone:</strong> +91 98765 43210</li>
-                    <li><strong>Address:</strong> Cultural Event Grounds, Iritty Division, Kerala</li>
+                    <li><strong>Phone:</strong> +91 70253 03402</li>
+                    <li><strong>Address:</strong> Sunni Center, Iritty Division,Vallithod, Kerala</li>
                 </ul>
                 <p>For more details, visit our <Link to="/info" className="text-link">Information Page</Link>.</p>
             </section>

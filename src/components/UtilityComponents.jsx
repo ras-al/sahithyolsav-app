@@ -1,11 +1,12 @@
 // Path: src/components/UtilityComponents.jsx
 
 import React from 'react';
+import logo from '/logo.png'; // Import the logo image
 
 // Displays a loading spinner with an optional message
 export const LoadingSpinner = ({ message = "Loading..." }) => (
     <div className="loading-spinner">
-        <div className="spinner"></div>
+        <img src={logo} alt="Loading Logo" className="loading-logo" style={{ width: '100px', height: 'auto', marginBottom: '20px' }} />
         <p>{message}</p>
     </div>
 );
