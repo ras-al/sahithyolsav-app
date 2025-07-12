@@ -10,7 +10,25 @@ body {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
 }
+.results-table-poster {
+    max-width: 60px; /* Adjusted width for portrait */
+    max-height: 80px; /* Adjusted height for portrait */
+    width: auto; /* Allow width to scale with height */
+    height: auto; /* Maintain aspect ratio */
+    object-fit: contain; /* Ensure the whole image is visible */
+    border-radius: 5px;
+    display: block; /* Ensures it takes its own line for centering */
+    margin: 0 auto; /* Center the image in its cell */
+}
 
+/* New style for "No Published" text in tables */
+.no-published-text {
+    color: #888; /* Grey out the text */
+    font-style: italic;
+    font-size: 0.9em;
+    display: block; /* Ensure it takes full cell space */
+    text-align: center; /* Center the text */
+}
 /* Container for pages */
 .page-container {
     max-width: 1200px;
@@ -1333,3 +1351,6 @@ p {
         font-size: 0.9em;
     }
 }
+/* Path: index.css */
+
+/* Results Table */
