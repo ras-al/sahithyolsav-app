@@ -12,6 +12,52 @@ const HomePage = () => {
     const [events, setEvents] = useState([]);
     const [message, setMessage] = useState('');
 
+    // --- Countdown State and Logic ---
+    const showCountdown = true; // Set to false to hide the countdown
+    const eventDate = new Date('2025-07-19T09:00:00+05:30'); // July 19, 2025, 9:00 AM IST (UTC+5:30)
+    const [timeLeft, setTimeLeft] = useState({
+        days: 0,
+        hours: 0,
+        minutes: 0,
+        seconds: 0,
+    });
+    const [countdownEnded, setCountdownEnded] = useState(false);
+
+    useEffect(() => {
+        const calculateTimeLeft = () => {
+            const now = new Date();
+            const difference = eventDate.getTime() - now.getTime();
+
+            if (difference < 0) {
+                setCountdownEnded(true);
+                return { days: 0, hours: 0, minutes: 0, seconds: 0 };
+            }
+
+            const days = Math.floor(difference / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((difference / (1000 * 60 * 60)) % 24);
+            const minutes = Math.floor((difference / 1000 / 60) % 60);
+            const seconds = Math.floor((difference / 1000) % 60);
+
+            return { days, hours, minutes, seconds };
+        };
+
+        if (showCountdown) {
+            setTimeLeft(calculateTimeLeft()); // Initial calculation
+            const timer = setInterval(() => {
+                const newTimeLeft = calculateTimeLeft();
+                if (newTimeLeft.days === 0 && newTimeLeft.hours === 0 && newTimeLeft.minutes === 0 && newTimeLeft.seconds === 0) {
+                    setCountdownEnded(true);
+                    clearInterval(timer);
+                }
+                setTimeLeft(newTimeLeft);
+            }, 1000);
+
+            return () => clearInterval(timer); // Cleanup on unmount
+        }
+    }, [showCountdown]);
+    // --- End Countdown State and Logic ---
+
+
     useEffect(() => {
         if (!db) return;
 
@@ -75,6 +121,29 @@ const HomePage = () => {
 
             <section className="events-section home-section">
                 <h2>Event Schedule</h2>
+                {showCountdown && (
+                    <div className="countdown-container">
+                        <p className="countdown-title">Event Starts In:</p>
+                        {countdownEnded ? (
+                            <p className="countdown-timer">The event has started!</p>
+                        ) : (
+                            <div className="countdown-timer">
+                                <div className="countdown-item">
+                                    {timeLeft.days}<span>Days</span>
+                                </div>
+                                <div className="countdown-item">
+                                    {timeLeft.hours}<span>Hours</span>
+                                </div>
+                                <div className="countdown-item">
+                                    {timeLeft.minutes}<span>Minutes</span>
+                                </div>
+                                <div className="countdown-item">
+                                    {timeLeft.seconds}<span>Seconds</span>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
                 {Object.keys(eventsByCategory).length === 0 ? (
                     <p className="no-data-message">No public events scheduled yet. Check back soon!</p>
                 ) : (
