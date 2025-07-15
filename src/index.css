@@ -1511,3 +1511,21 @@ p {
     text-transform: uppercase;
     margin-top: 5px;
 }
+@media (max-width: 768px) {
+    .countdown-timer {
+        flex-wrap: wrap; /* Allow items to wrap to the next line */
+        gap: 10px; /* Reduce gap between items */
+        font-size: 1.8em; /* Slightly reduce font size for overall timer */
+    }
+
+    .countdown-item {
+        flex: 1 1 45%; /* Allow items to wrap and take roughly half width, with some flexibility */
+    }
+}
+
+/* For screens up to 480px wide (mobile phones) */
+@media (max-width: 480px) {
+    .countdown-timer {
+        font-size: 1.5em; /* Further reduce font size for very small screens */
+    }
+}
