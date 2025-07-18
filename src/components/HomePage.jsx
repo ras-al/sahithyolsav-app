@@ -96,7 +96,8 @@ const HomePage = () => {
         const [hours, minutes] = time24.split(':');
         const date = new Date();
         date.setHours(parseInt(hours), parseInt(minutes));
-        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        // Explicitly set hour12 to true and define locale for consistent AM/PM
+        return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
     };
 
     const getJudgesForEvent = (event) => {
@@ -128,6 +129,11 @@ const HomePage = () => {
         <div className="home-page-container">
             <header className="hero-section-image">
                 <img src={themeImage} alt="Sahithyolsav Banner" className="banner-image" />
+                <div className="hero-content">
+                    <h1>Sahithyolsav 2025</h1>
+                    <p className="tagline">Feel the Experience</p>
+                    <p className="event-dates-location">July 19-21, 2025 | Iritty Division</p>
+                </div>
             </header>
 
             <MessageBox message={message} type={message.includes("Failed") ? 'error' : 'info'} onClose={() => setMessage('')} />
@@ -169,6 +175,7 @@ const HomePage = () => {
                                         <h4>{event.name}</h4>
                                         <p><strong>Date:</strong> {event.date}</p>
                                         <p><strong>Time:</strong> {formatTime(event.time)} {event.endTime ? `- ${formatTime(event.endTime)}` : ''}</p>
+                                        
                                         <p><strong>Stage:</strong> {event.stage}</p>
                                         <p><strong>Status:</strong> <span className={`event-status ${getEventStatus(event).toLowerCase().replace(' (not marked as complete)', '').replace(' ', '-')}`}>{getEventStatus(event)}</span></p>
                                         <p><strong>Judges:</strong> {getJudgesForEvent(event)}</p>
