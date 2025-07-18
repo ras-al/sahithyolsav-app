@@ -117,6 +117,7 @@ const AdminDashboard = () => {
         const [eventName, setEventName] = useState('');
         const [eventDate, setEventDate] = useState('');
         const [eventTime, setEventTime] = useState('');
+        const [eventEndTime, setEventEndTime] = useState(''); // New state for End Time
         // Removed eventLocation state
         const [eventStageType, setEventStageType] = useState('on-stage'); // 'on-stage' or 'off-stage'
         const [eventStageNumber, setEventStageNumber] = useState(''); // E.g., 'Stage 1', 'Stage 2'
@@ -169,6 +170,7 @@ const AdminDashboard = () => {
                     name: eventName,
                     date: eventDate,
                     time: eventTime,
+                    endTime: eventEndTime, // Include End Time
                     // Removed location from eventData
                     stageType: eventStageType, // 'on-stage' or 'off-stage'
                     stage: eventStageType === 'on-stage' ? eventStageNumber : 'N/A', // Actual stage name/number
@@ -193,6 +195,7 @@ const AdminDashboard = () => {
                 setEventName('');
                 setEventDate('');
                 setEventTime('');
+                setEventEndTime(''); // Reset End Time
                 // Removed setEventLocation
                 setEventStageType('on-stage'); // Reset to default
                 setEventStageNumber(''); // Reset stage number
@@ -213,6 +216,7 @@ const AdminDashboard = () => {
             setEventName(event.name);
             setEventDate(event.date);
             setEventTime(event.time);
+            setEventEndTime(event.endTime || ''); // Set End Time for editing
             // Removed event.location from here
             setEventStageType(event.stageType || 'on-stage');
             setEventStageNumber(event.stageType === 'on-stage' ? (event.stage || '') : '');
@@ -518,6 +522,10 @@ const AdminDashboard = () => {
                         <label>Time:</label>
                         <input type="time" value={eventTime} onChange={(e) => setEventTime(e.target.value)} required />
                     </div>
+                    <div className="form-group">
+                        <label>End Time:</label> {/* New End Time field */}
+                        <input type="time" value={eventEndTime} onChange={(e) => setEventEndTime(e.target.value)} />
+                    </div>
                     {/* Removed Location input field */}
                     <div className="form-group">
                         <label>Stage Type:</label>
@@ -605,6 +613,7 @@ const AdminDashboard = () => {
                         setEventName('');
                         setEventDate('');
                         setEventTime('');
+                        setEventEndTime(''); // Reset End Time
                         // Removed setEventLocation
                         setEventStageType('on-stage');
                         setEventStageNumber('');
@@ -639,7 +648,7 @@ const AdminDashboard = () => {
                                     {eventsInCat.map(event => (
                                         <div key={event.id} className="list-card event-list-card">
                                             <p><strong>{event.name}</strong> ({event.category})</p>
-                                            <p>Date: {event.date}, Time: {event.time}</p>
+                                            <p>Date: {event.date}, Time: {event.time} {event.endTime ? `- ${event.endTime}` : ''}</p> {/* Display End Time */}
                                             {/* Removed Location display */}
                                             <p>Stage Type: {event.stageType || 'N/A'}, Stage: {event.stage || 'N/A'}, Type: {event.competitionType || 'N/A'}, Total Marks: {event.totalMarks}</p>
                                             <p>Judges: {event.judges.map(j => j.name).join(', ')}</p>
@@ -1252,7 +1261,7 @@ const AdminDashboard = () => {
                                         const participantsInEvent = eventsData[eventId];
                                         return (
                                             <div key={eventId} className="event-participants-group">
-                                                <h4>Event: {eventName}</h4>
+                                                <h6>Event: {eventName}</h6>
                                                 <table className="participant-table">
                                                     <thead>
                                                         <tr>

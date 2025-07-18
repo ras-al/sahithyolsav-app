@@ -14,7 +14,7 @@ const HomePage = () => {
 
     // --- Countdown State and Logic ---
     const showCountdown = true; // Set to false to hide the countdown
-    const eventDate = new Date('2025-07-19T09:00:00+05:30'); // July 19, 2025, 9:00 AM IST (UTC+5:30)
+    const eventDate = new Date('2025-07-19T11:00:00+05:30'); // July 19, 2025, 11:00 AM IST (UTC+5:30)
     const [timeLeft, setTimeLeft] = useState({
         days: 0,
         hours: 0,
@@ -90,12 +90,21 @@ const HomePage = () => {
         return 'Unknown';
     };
 
+    // Helper to convert 24-hour time to 12-hour AM/PM format
+    const formatTime = (time24) => {
+        if (!time24) return 'N/A';
+        const [hours, minutes] = time24.split(':');
+        const date = new Date();
+        date.setHours(parseInt(hours), parseInt(minutes));
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    };
+
     const getJudgesForEvent = (event) => {
         if (!event.judges || event.judges.length === 0) return 'No judges assigned yet.';
         return event.judges.map(j => j.name).join(', ');
     };
 
-    // Group events by category
+    // Group events by category and then sort by time ascending
     const eventsByCategory = events.reduce((acc, event) => {
         const category = event.category || 'Uncategorized';
         if (!acc[category]) {
@@ -105,16 +114,20 @@ const HomePage = () => {
         return acc;
     }, {});
 
+    // Sort events within each category by time
+    Object.keys(eventsByCategory).forEach(category => {
+        eventsByCategory[category].sort((a, b) => {
+            const timeA = a.time || '00:00'; // Default to start of day if time is missing
+            const timeB = b.time || '00:00';
+            return timeA.localeCompare(timeB);
+        });
+    });
+
+
     return (
         <div className="home-page-container">
             <header className="hero-section-image">
                 <img src={themeImage} alt="Sahithyolsav Banner" className="banner-image" />
-                <div className="hero-content">
-                    {/* You can add text content here if you want it overlaid on the image */}
-                    {/* <h1>Sahithyolsav 2025</h1> */}
-                    {/* <p className="tagline">Feel the Experience</p> */}
-                    {/* <p className="event-dates-location">March 15-17, 2025 | Iritty Division</p> */}
-                </div>
             </header>
 
             <MessageBox message={message} type={message.includes("Failed") ? 'error' : 'info'} onClose={() => setMessage('')} />
@@ -155,8 +168,7 @@ const HomePage = () => {
                                     <div key={event.id} className="event-card">
                                         <h4>{event.name}</h4>
                                         <p><strong>Date:</strong> {event.date}</p>
-                                        <p><strong>Time:</strong> {event.time}</p>
-                                        
+                                        <p><strong>Time:</strong> {formatTime(event.time)} {event.endTime ? `- ${formatTime(event.endTime)}` : ''}</p>
                                         <p><strong>Stage:</strong> {event.stage}</p>
                                         <p><strong>Status:</strong> <span className={`event-status ${getEventStatus(event).toLowerCase().replace(' (not marked as complete)', '').replace(' ', '-')}`}>{getEventStatus(event)}</span></p>
                                         <p><strong>Judges:</strong> {getJudgesForEvent(event)}</p>
