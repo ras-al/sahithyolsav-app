@@ -156,7 +156,7 @@ const HomePage = () => {
                                         <h4>{event.name}</h4>
                                         <p><strong>Date:</strong> {event.date}</p>
                                         <p><strong>Time:</strong> {event.time}</p>
-                                        <p><strong>Location:</strong> {event.location || 'N/A'}</p>
+                                        
                                         <p><strong>Stage:</strong> {event.stage}</p>
                                         <p><strong>Status:</strong> <span className={`event-status ${getEventStatus(event).toLowerCase().replace(' (not marked as complete)', '').replace(' ', '-')}`}>{getEventStatus(event)}</span></p>
                                         <p><strong>Judges:</strong> {getJudgesForEvent(event)}</p>
