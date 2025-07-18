@@ -129,11 +129,6 @@ const HomePage = () => {
         <div className="home-page-container">
             <header className="hero-section-image">
                 <img src={themeImage} alt="Sahithyolsav Banner" className="banner-image" />
-                <div className="hero-content">
-                    <h1>Sahithyolsav 2025</h1>
-                    <p className="tagline">Feel the Experience</p>
-                    <p className="event-dates-location">July 19-21, 2025 | Iritty Division</p>
-                </div>
             </header>
 
             <MessageBox message={message} type={message.includes("Failed") ? 'error' : 'info'} onClose={() => setMessage('')} />
