@@ -11,6 +11,7 @@ const HomePage = () => {
     const { db, appId } = useAuth();
     const [events, setEvents] = useState([]);
     const [message, setMessage] = useState('');
+    const [displayMode, setDisplayMode] = useState('category'); // 'category' or 'stage'
 
     // --- Countdown State and Logic ---
     const showCountdown = true; // Set to false to hide the countdown
@@ -105,19 +106,20 @@ const HomePage = () => {
         return event.judges.map(j => j.name).join(', ');
     };
 
-    // Group events by category and then sort by time ascending
-    const eventsByCategory = events.reduce((acc, event) => {
-        const category = event.category || 'Uncategorized';
-        if (!acc[category]) {
-            acc[category] = [];
+    // Group events based on selected display mode
+    const groupedEvents = events.reduce((acc, event) => {
+        const key = displayMode === 'category' ? event.category : event.stage;
+        const groupName = key || (displayMode === 'category' ? 'Uncategorized' : 'Unassigned Stage');
+        if (!acc[groupName]) {
+            acc[groupName] = [];
         }
-        acc[category].push(event);
+        acc[groupName].push(event);
         return acc;
     }, {});
 
-    // Sort events within each category by time
-    Object.keys(eventsByCategory).forEach(category => {
-        eventsByCategory[category].sort((a, b) => {
+    // Sort events within each group by time
+    Object.keys(groupedEvents).forEach(groupName => {
+        groupedEvents[groupName].sort((a, b) => {
             const timeA = a.time || '00:00'; // Default to start of day if time is missing
             const timeB = b.time || '00:00';
             return timeA.localeCompare(timeB);
@@ -158,20 +160,34 @@ const HomePage = () => {
                         )}
                     </div>
                 )}
-                {Object.keys(eventsByCategory).length === 0 ? (
+
+                <div className="display-mode-selector form-group"> {/* Added form-group for consistent styling */}
+                    <label htmlFor="display-mode-select">View Events By:</label>
+                    <select
+                        id="display-mode-select"
+                        value={displayMode}
+                        onChange={(e) => setDisplayMode(e.target.value)}
+                        className="select-filter" // Add a class for specific styling if needed
+                    >
+                        <option value="category">Category</option>
+                        <option value="stage">Stage</option>
+                    </select>
+                </div>
+
+                {Object.keys(groupedEvents).length === 0 ? (
                     <p className="no-data-message">No public events scheduled yet. Check back soon!</p>
                 ) : (
-                    Object.entries(eventsByCategory).map(([category, eventsInCat]) => (
-                        <div key={category} className="event-category-group-homepage">
-                            <h3>Category: {category}</h3>
+                    Object.entries(groupedEvents).map(([groupName, eventsInGroup]) => (
+                        <div key={groupName} className="event-category-group-homepage">
+                            <h3>{displayMode === 'category' ? `Category: ${groupName}` : `Stage: ${groupName}`}</h3>
                             <div className="event-cards-container">
-                                {eventsInCat.map(event => (
+                                {eventsInGroup.map(event => (
                                     <div key={event.id} className="event-card">
                                         <h4>{event.name}</h4>
                                         <p><strong>Date:</strong> {event.date}</p>
                                         <p><strong>Time:</strong> {formatTime(event.time)} {event.endTime ? `- ${formatTime(event.endTime)}` : ''}</p>
-                                        
                                         <p><strong>Stage:</strong> {event.stage}</p>
+                                        <p><strong>Category:</strong> {event.category}</p>
                                         <p><strong>Status:</strong> <span className={`event-status ${getEventStatus(event).toLowerCase().replace(' (not marked as complete)', '').replace(' ', '-')}`}>{getEventStatus(event)}</span></p>
                                         <p><strong>Judges:</strong> {getJudgesForEvent(event)}</p>
                                     </div>
