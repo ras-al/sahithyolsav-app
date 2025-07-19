@@ -4,7 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../AuthContext.jsx'; // Correct path to AuthContext
 import { MessageBox } from './UtilityComponents.jsx'; // Import MessageBox
-import { collection, onSnapshot, query, where } from 'firebase/firestore'; // Import Firestore functions
+import { collection, onSnapshot, query, where, orderBy } from 'firebase/firestore'; // Import Firestore functions
+
 import themeImage from '/banner.png'; // Import the theme image for the banner
 
 const HomePage = () => {
@@ -15,7 +16,7 @@ const HomePage = () => {
 
     // --- Countdown State and Logic ---
     const showCountdown = false; // Set to false to hide the countdown
-    const eventDate = new Date('2025-07-19T11:00:00+05:30'); // July 19, 2025, 11:00 AM IST (UTC+5:30)
+    const eventDate = new Date('2025-07-19T09:00:00+05:30'); // July 19, 2025, 9:00 AM IST (UTC+5:30)
     const [timeLeft, setTimeLeft] = useState({
         days: 0,
         hours: 0,
@@ -62,9 +63,14 @@ const HomePage = () => {
     useEffect(() => {
         if (!db) return;
 
-        // Query to fetch only public events
+        // Query to fetch only public events, ordered by date and then time
         const eventsColRef = collection(db, `artifacts/${appId}/public/data/events`);
-        const q = query(eventsColRef, where('isPublic', '==', true)); // Only show public events
+        const q = query(
+            eventsColRef,
+            where('isPublic', '==', true),
+            orderBy('date', 'asc'), // Sort by date ascending
+            orderBy('time', 'asc')  // Then by time ascending
+        );
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const eventsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -117,15 +123,8 @@ const HomePage = () => {
         return acc;
     }, {});
 
-    // Sort events within each group by time
-    Object.keys(groupedEvents).forEach(groupName => {
-        groupedEvents[groupName].sort((a, b) => {
-            const timeA = a.time || '00:00'; // Default to start of day if time is missing
-            const timeB = b.time || '00:00';
-            return timeA.localeCompare(timeB);
-        });
-    });
-
+    // Sort the keys (category names or stage names) alphabetically
+    const sortedGroupNames = Object.keys(groupedEvents).sort();
 
     return (
         <div className="home-page-container">
@@ -161,27 +160,27 @@ const HomePage = () => {
                     </div>
                 )}
 
-                <div className="display-mode-selector form-group"> {/* Added form-group for consistent styling */}
+                <div className="display-mode-selector form-group">
                     <label htmlFor="display-mode-select">View Events By:</label>
                     <select
                         id="display-mode-select"
                         value={displayMode}
                         onChange={(e) => setDisplayMode(e.target.value)}
-                        className="select-filter" // Add a class for specific styling if needed
+                        className="select-filter"
                     >
                         <option value="category">Category</option>
                         <option value="stage">Stage</option>
                     </select>
                 </div>
 
-                {Object.keys(groupedEvents).length === 0 ? (
+                {sortedGroupNames.length === 0 ? (
                     <p className="no-data-message">No public events scheduled yet. Check back soon!</p>
                 ) : (
-                    Object.entries(groupedEvents).map(([groupName, eventsInGroup]) => (
+                    sortedGroupNames.map(groupName => (
                         <div key={groupName} className="event-category-group-homepage">
                             <h3>{displayMode === 'category' ? `Category: ${groupName}` : `Stage: ${groupName}`}</h3>
                             <div className="event-cards-container">
-                                {eventsInGroup.map(event => (
+                                {groupedEvents[groupName].map(event => ( // Events within group are already sorted by date/time from Firestore query
                                     <div key={event.id} className="event-card">
                                         <h4>{event.name}</h4>
                                         <p><strong>Date:</strong> {event.date}</p>
