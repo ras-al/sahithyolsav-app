@@ -14,7 +14,7 @@ const HomePage = () => {
     const [displayMode, setDisplayMode] = useState('category'); // 'category' or 'stage'
 
     // --- Countdown State and Logic ---
-    const showCountdown = true; // Set to false to hide the countdown
+    const showCountdown = false; // Set to false to hide the countdown
     const eventDate = new Date('2025-07-19T11:00:00+05:30'); // July 19, 2025, 11:00 AM IST (UTC+5:30)
     const [timeLeft, setTimeLeft] = useState({
         days: 0,
