@@ -9,11 +9,13 @@ const ResultsPage = () => {
     const { db, appId } = useAuth();
     const [allEvents, setAllEvents] = useState([]); // State to hold all events
     const [publishedResults, setPublishedResults] = useState([]); // State to hold only published results
+    const [participants, setParticipants] = useState([]); // State to hold all participants
     const [message, setMessage] = useState('');
     const [isPosterModalOpen, setIsPosterModalOpen] = useState(false);
     const [currentPosterBase64, setCurrentPosterBase64] = useState('');
     const [currentPosterEventName, setCurrentPosterEventName] = useState('');
-
+    const [selectedEventId, setSelectedEventId] = useState(''); // State for selected event in form
+    const [processedRankedParticipants, setProcessedRankedParticipants] = useState([]); // For displaying ranks before publishing
 
     useEffect(() => {
         if (!db) return;
@@ -41,9 +43,20 @@ const ResultsPage = () => {
             setMessage("Failed to load published results. Please try again.");
         });
 
+        // 3. Fetch all participants (needed for sector lookup)
+        const participantsColRef = collection(db, `artifacts/${appId}/public/data/participants`);
+        const unsubscribeParticipants = onSnapshot(participantsColRef, (snapshot) => {
+            setParticipants(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        }, (error) => {
+            console.error("Error fetching participants:", error);
+            setMessage("Failed to load participant data. Please try again.");
+        });
+
+
         return () => {
             unsubscribeEvents();
             unsubscribeResults();
+            unsubscribeParticipants(); // Cleanup participants listener
         };
     }, [db, appId]);
 
@@ -105,28 +118,33 @@ const ResultsPage = () => {
                     <section key={category} className="results-category-section">
                         <h2>Category: {category}</h2>
                         <div className="results-events-container">
+                            {/* Display results in a table format */}
                             <table className="results-table">
                                 <thead>
                                     <tr>
                                         <th>Event</th>
                                         <th>Competition Type</th>
-                                        <th>1st Place</th>
-                                        <th>2nd Place</th>
-                                        <th>3rd Place</th>
+                                        <th>1st Place (Name & Sector)</th> {/* Updated header */}
+                                        <th>2nd Place (Name & Sector)</th> {/* Updated header */}
+                                        <th>3rd Place (Name & Sector)</th> {/* Updated header */}
                                         <th>Poster</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {eventsWithResults.map(({ eventDetails, publishedResult }) => (
+                                    {combinedResultsByCategory[category].map(({ eventDetails, publishedResult }) => (
                                         <tr key={eventDetails.id}>
                                             <td>{eventDetails.name || 'N/A'}</td>
                                             <td>{eventDetails.competitionType || 'N/A'}</td>
                                             {[1, 2, 3].map(rank => {
                                                 const placement = publishedResult?.placements?.find(p => p.rank === rank);
+                                                // Find the participant's sector using their ID from the global participants list
+                                                const participantDetails = participants.find(p => p.id === placement?.participantId);
+                                                const participantSector = participantDetails ? participantDetails.sector : 'N/A';
+
                                                 return (
                                                     <td key={rank}>
                                                         {placement ? (
-                                                            `${placement.participantName} (${placement.pointsAwarded} pts)`
+                                                            `${placement.participantName} (${participantSector}) (${placement.pointsAwarded} pts)` // Display name, sector, and points
                                                         ) : (
                                                             <span className="no-published-text">No Published</span>
                                                         )}
