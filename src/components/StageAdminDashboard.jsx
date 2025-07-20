@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext.jsx'; // Correct path to AuthContext
 import { MessageBox, LoadingSpinner, Modal } from './UtilityComponents.jsx'; // Import utility components and Modal
-import { collection, onSnapshot, query, where, updateDoc, doc, getDocs,getDoc, writeBatch, addDoc } from 'firebase/firestore'; // Import writeBatch and addDoc
+import { collection, onSnapshot, query, where, updateDoc, doc, getDocs, writeBatch, addDoc, getDoc, deleteDoc } from 'firebase/firestore'; // Import writeBatch, addDoc, getDoc, deleteDoc
 
 const StageAdminDashboard = () => {
     const { currentUser, db, appId, loadingAuth, stageDetails } = useAuth();
@@ -358,6 +358,40 @@ const StageAdminDashboard = () => {
         }
     };
 
+    // New: Handle deleting a participant from the current event
+    const handleDeleteParticipantFromEvent = async (participantId, eventId, participantName) => {
+        setMessage('');
+        if (!window.confirm(`Are you sure you want to remove ${participantName} from this event? This will also clear their playing status and code for this event.`)) {
+            return;
+        }
+
+        try {
+            const participantRef = doc(db, `artifacts/${appId}/public/data/participants`, participantId);
+            const participantSnap = await getDoc(participantRef);
+
+            if (!participantSnap.exists()) {
+                setMessage("Participant not found.");
+                return;
+            }
+
+            const currentEvents = participantSnap.data().events || [];
+            const updatedEvents = currentEvents.filter(eventEntry => eventEntry.eventId !== eventId);
+
+            if (updatedEvents.length === 0) {
+                // If no events left, delete the entire participant document
+                await deleteDoc(participantRef);
+                setMessage(`Participant ${participantName} removed from event and deleted entirely as they have no other events.`);
+            } else {
+                // Otherwise, just update the events array for this participant
+                await updateDoc(participantRef, { events: updatedEvents });
+                setMessage(`Participant ${participantName} removed from this event.`);
+            }
+        } catch (error) {
+            console.error("Error removing participant from event:", error);
+            setMessage("Failed to remove participant from event: " + error.message);
+        }
+    };
+
 
     if (loadingAuth) {
         return <LoadingSpinner message="Authenticating stage admin permissions..." />;
@@ -462,16 +496,17 @@ const StageAdminDashboard = () => {
                             <thead>
                                 <tr>
                                     <th>Name</th>
-                                    <th>Sector</th> {/* New column header */}
+                                    <th>Sector</th>
                                     <th>Code</th>
                                     <th>Playing Now</th>
+                                    <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {participantsForSelectedEvent.map(participant => (
                                     <tr key={participant.id}>
                                         <td>{participant.name}</td>
-                                        <td>{participant.sector}</td> {/* Display sector */}
+                                        <td>{participant.sector}</td>
                                         <td>
                                             <input
                                                 type="text"
@@ -486,8 +521,16 @@ const StageAdminDashboard = () => {
                                                 type="checkbox"
                                                 checked={participant.isPlaying}
                                                 onChange={() => handleToggleIsPlaying(participant.id, selectedEventId, participant.isPlaying)}
-                                                disabled={currentEventDetails.status !== 'live'} // Only allow changing if event is live
+                                                disabled={currentEventDetails.status !== 'live'}
                                             />
+                                        </td>
+                                        <td> {/* New column for delete button */}
+                                            <button
+                                                className="btn btn-danger btn-small"
+                                                onClick={() => handleDeleteParticipantFromEvent(participant.id, selectedEventId, participant.name)}
+                                            >
+                                                Delete
+                                            </button>
                                         </td>
                                     </tr>
                                 ))}

@@ -124,7 +124,7 @@ const AdminDashboard = () => {
         const [eventStageNumber, setEventStageNumber] = useState(''); // E.g., 'Stage 1', 'Stage 2'
         const [eventCategory, setEventCategory] = useState(EVENT_CATEGORIES[0]);
         const [competitionType, setCompetitionType] = useState('single');
-        const [totalMarks, setTotalMarks] = useState(100);
+        const [totalMarks, setTotalMarks] = useState(100); // Kept for event metadata, not individual participant marks
         // const [selectedJudgeIds, setSelectedJudgeIds] = useState([]); // Removed: No longer assigning judges
         // const [judgeMarkDistribution, setJudgeMarkDistribution] = useState({}); // Removed: No longer managing judge distribution
         const [isViewScoresModalOpen, setIsViewScoresModalOpen] = useState(false);
@@ -183,7 +183,7 @@ const AdminDashboard = () => {
                     stage: eventStageType === 'on-stage' ? eventStageNumber : 'N/A', // Actual stage name/number
                     category: eventCategory,
                     competitionType: competitionType,
-                    totalMarks: parseInt(totalMarks),
+                    totalMarks: parseInt(totalMarks), // Still kept as event metadata
                     // judges: judgesWithNames, // Removed: No longer assigning judges
                     // markDistribution: judgeMarkDistribution, // Removed: No longer managing judge distribution
                     status: 'scheduled', // Default status for new events
@@ -229,7 +229,7 @@ const AdminDashboard = () => {
             setEventStageNumber(event.stageType === 'on-stage' ? (event.stage || '') : '');
             setEventCategory(event.category);
             setCompetitionType(event.competitionType || 'single');
-            setTotalMarks(event.totalMarks);
+            setTotalMarks(event.totalMarks); // Still kept as event metadata
             // setSelectedJudgeIds(event.judges?.map(j => j.id) || []); // Removed
             // setJudgeMarkDistribution(event.markDistribution || {}); // Removed
             setIsPublic(event.isPublic || false); // Set public visibility for editing
@@ -347,10 +347,9 @@ const AdminDashboard = () => {
 
             for (const participant of participantsToMark) {
                 const mark = adminMarks[participant.id];
-                if (mark === undefined || mark === null || isNaN(mark)) {
-                    // Skip if no mark entered, or handle as 0
-                    continue;
-                }
+                // Allow empty/NaN marks to be treated as 0 or simply not stored if undefined
+                const finalMark = (mark === undefined || mark === null || isNaN(mark)) ? 0 : mark;
+
 
                 // Check if a score already exists for this participant in this event (from admin)
                 const existingScoreQuery = query(
@@ -368,7 +367,7 @@ const AdminDashboard = () => {
                     participantName: participant.name,
                     judgeId: 'admin', // Mark as submitted by admin
                     judgeName: 'Admin', // Admin's name for score record
-                    marks: mark,
+                    marks: finalMark,
                     timestamp: new Date().toISOString()
                 };
 
@@ -755,7 +754,7 @@ const AdminDashboard = () => {
                         <p>No participants found for this event.</p>
                     ) : (
                         <>
-                            <p>Enter marks (out of {eventToMark?.totalMarks || 100}) for each participant.</p>
+                            <p>Enter marks for each participant.</p>
                             <div className="admin-marking-list">
                                 {participantsToMark.map(participant => (
                                     <div key={participant.id} className="admin-marking-item form-group">
@@ -765,7 +764,7 @@ const AdminDashboard = () => {
                                             value={adminMarks[participant.id] !== undefined ? adminMarks[participant.id] : ''}
                                             onChange={(e) => handleAdminMarkChange(participant.id, e.target.value)}
                                             min="0"
-                                            max={eventToMark?.totalMarks || 100}
+                                            // Removed max attribute: allowing custom marks
                                         />
                                     </div>
                                 ))}
