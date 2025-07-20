@@ -3,8 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext.jsx'; // Correct path to AuthContext
-import { MessageBox, LoadingSpinner } from './UtilityComponents.jsx'; // Import utility components
-import { collection, onSnapshot, query, where, updateDoc, doc, getDocs,getDoc, writeBatch } from 'firebase/firestore'; // Import writeBatch
+import { MessageBox, LoadingSpinner, Modal } from './UtilityComponents.jsx'; // Import utility components and Modal
+import { collection, onSnapshot, query, where, updateDoc, doc, getDocs, writeBatch, addDoc } from 'firebase/firestore'; // Import writeBatch and addDoc
 
 const StageAdminDashboard = () => {
     const { currentUser, db, appId, loadingAuth, stageDetails } = useAuth();
@@ -14,6 +14,14 @@ const StageAdminDashboard = () => {
     const [participantsForSelectedEvent, setParticipantsForSelectedEvent] = useState([]);
     const [message, setMessage] = useState('');
     const [currentEventDetails, setCurrentEventDetails] = useState(null);
+    const [sectors, setSectors] = useState([]); // New state to hold sectors for dropdown
+
+    // State for Add Participant Modal
+    const [isAddParticipantModalOpen, setIsAddParticipantModalOpen] = useState(false);
+    const [newParticipantName, setNewParticipantName] = useState('');
+    const [newParticipantSector, setNewParticipantSector] = useState('');
+    const [newParticipantMessage, setNewParticipantMessage] = useState('');
+
 
     // Redirect if not stage admin or auth not ready
     useEffect(() => {
@@ -39,7 +47,7 @@ const StageAdminDashboard = () => {
         const q = query(eventsColRef, where('stage', '==', stageDetails.assignedStage));
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const eventsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+            const eventsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setAssignedEvents(eventsData);
 
             // If an event is currently selected, update its details in case status changed
@@ -78,6 +86,7 @@ const StageAdminDashboard = () => {
                         name: p.name, // Include name for display
                         code: eventEntry.code || '', // Current code, if any
                         isPlaying: eventEntry.isPlaying || false, // New: isPlaying status
+                        sector: p.sector || 'N/A', // Include sector
                         originalEvents: p.events // Keep original events array to update
                     };
                 }).sort((a, b) => a.name.localeCompare(b.name)); // Sort by name for consistent display
@@ -102,7 +111,8 @@ const StageAdminDashboard = () => {
                     id: p.id,
                     name: p.name,
                     code: eventEntry.code || '',
-                    isPlaying: eventEntry.isPlaying || false, // New: isPlaying status
+                    isPlaying: eventEntry.isPlaying || false,
+                    sector: p.sector || 'N/A',
                     originalEvents: p.events
                 };
             }).sort((a, b) => a.name.localeCompare(b.name));
@@ -113,6 +123,15 @@ const StageAdminDashboard = () => {
 
         return () => participantsUnsubscribe();
     }, [db, appId, selectedEventId]);
+
+    // Fetch sectors for the dropdown
+    useEffect(() => {
+        if (!db) return;
+        const unsubscribeSectors = onSnapshot(collection(db, `artifacts/${appId}/public/data/sectors`), (snapshot) => {
+            setSectors(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        }, (error) => console.error("Error fetching sectors:", error));
+        return () => unsubscribeSectors();
+    }, [db, appId]);
 
 
     // Helper function to generate alphabetical codes (A, B, ..., Z, AA, AB, ...)
@@ -268,6 +287,77 @@ const StageAdminDashboard = () => {
         }
     };
 
+    // Handle adding a new participant via modal
+    const handleAddNewParticipant = async () => {
+        setNewParticipantMessage('');
+        if (!newParticipantName.trim() || !newParticipantSector.trim() || !selectedEventId) {
+            setNewParticipantMessage("Name and Sector are required to add a participant to this event.");
+            return;
+        }
+
+        try {
+            // Check if participant with same name and sector already exists (simple check)
+            const existingQuery = query(
+                collection(db, `artifacts/${appId}/public/data/participants`),
+                where('name', '==', newParticipantName.trim()),
+                where('sector', '==', newParticipantSector.trim())
+            );
+            const existingSnap = await getDocs(existingQuery);
+
+            let participantIdToUpdate = null;
+            let currentParticipantEvents = [];
+
+            if (!existingSnap.empty) {
+                // Participant exists, update their events array
+                const existingDoc = existingSnap.docs[0];
+                participantIdToUpdate = existingDoc.id;
+                currentParticipantEvents = existingDoc.data().events || [];
+
+                // Check if already registered for this event
+                if (currentParticipantEvents.some(e => e.eventId === selectedEventId)) {
+                    setNewParticipantMessage("Participant is already registered for this event.");
+                    return;
+                }
+            }
+
+            const newEventEntry = {
+                eventId: selectedEventId,
+                code: '', // Code will be generated later
+                isPlaying: false
+            };
+
+            if (participantIdToUpdate) {
+                // Update existing participant
+                await updateDoc(doc(db, `artifacts/${appId}/public/data/participants`, participantIdToUpdate), {
+                    events: [...currentParticipantEvents, newEventEntry]
+                });
+                setNewParticipantMessage(`Participant "${newParticipantName}" updated and added to this event!`);
+            } else {
+                // Add new participant
+                const newParticipantData = {
+                    name: newParticipantName.trim(),
+                    sector: newParticipantSector.trim(),
+                    events: [newEventEntry],
+                    // Add default values for other fields if necessary, e.g., class, age, unit
+                    class: 'N/A',
+                    age: 0,
+                    unit: 'N/A',
+                    category: currentEventDetails.category || 'N/A' // Inherit category from event
+                };
+                await addDoc(collection(db, `artifacts/${appId}/public/data/participants`), newParticipantData);
+                setNewParticipantMessage(`New participant "${newParticipantName}" added to this event!`);
+            }
+
+            setNewParticipantName('');
+            setNewParticipantSector('');
+            setIsAddParticipantModalOpen(false);
+            setMessage("Participant added/updated successfully!"); // Main dashboard message
+        } catch (error) {
+            console.error("Error adding new participant:", error);
+            setNewParticipantMessage("Failed to add participant: " + error.message);
+        }
+    };
+
 
     if (loadingAuth) {
         return <LoadingSpinner message="Authenticating stage admin permissions..." />;
@@ -337,8 +427,8 @@ const StageAdminDashboard = () => {
                 <div className="participants-for-event admin-section w-full max-w-md"> {/* Added w-full max-w-md */}
                     <h4>Participants for {currentEventDetails.name}</h4>
                     <div className="form-card" style={{ textAlign: 'center' }}>
-                        <h5>Manage Participant Codes</h5>
-                        <p>Generate random alphabetical codes or clear existing ones for participants in this event.</p>
+                        <h5>Manage Participant Codes & Status</h5>
+                        <p>Generate random alphabetical codes, clear existing ones, or add new participants.</p>
                         <div className="card-actions" style={{ justifyContent: 'center', gap: '15px' }}>
                             <button
                                 className="btn btn-primary"
@@ -354,9 +444,16 @@ const StageAdminDashboard = () => {
                             >
                                 Clear Codes
                             </button>
+                            <button
+                                className="btn btn-info"
+                                onClick={() => setIsAddParticipantModalOpen(true)}
+                                disabled={currentEventDetails.stageType === 'off-stage'} // Cannot add participants to off-stage events here
+                            >
+                                Add Participant
+                            </button>
                         </div>
                         <small className="warn-message" style={{ display: 'block', marginTop: '10px' }}>
-                            Codes can only be generated/cleared for 'On Stage' events that are 'Scheduled' or 'Live'.
+                            Codes can only be generated/cleared for 'On Stage' events that are 'Scheduled' or 'Live'. Clearing is always possible.
                         </small>
                     </div>
 
@@ -364,15 +461,17 @@ const StageAdminDashboard = () => {
                         <table className="participant-table">
                             <thead>
                                 <tr>
-                                    <th>Participant Name</th>
-                                    <th>Current Code</th>
-                                    <th>Playing Now</th> {/* New column header */}
+                                    <th>Name</th>
+                                    <th>Sector</th> {/* New column header */}
+                                    <th>Code</th>
+                                    <th>Playing Now</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {participantsForSelectedEvent.map(participant => (
                                     <tr key={participant.id}>
                                         <td>{participant.name}</td>
+                                        <td>{participant.sector}</td> {/* Display sector */}
                                         <td>
                                             <input
                                                 type="text"
@@ -382,7 +481,7 @@ const StageAdminDashboard = () => {
                                                 style={{ width: '60px', textTransform: 'uppercase', textAlign: 'center' }}
                                             />
                                         </td>
-                                        <td> {/* New column for playing status */}
+                                        <td>
                                             <input
                                                 type="checkbox"
                                                 checked={participant.isPlaying}
@@ -399,6 +498,40 @@ const StageAdminDashboard = () => {
                     )}
                 </div>
             )}
+
+            {/* Modal for Adding New Participant */}
+            <Modal
+                isOpen={isAddParticipantModalOpen}
+                onClose={() => setIsAddParticipantModalOpen(false)}
+                title={`Add Participant to ${currentEventDetails?.name || ''}`}
+            >
+                <MessageBox message={newParticipantMessage} type="error" onClose={() => setNewParticipantMessage('')} />
+                <div className="form-group">
+                    <label htmlFor="newParticipantName">Participant Name:</label>
+                    <input
+                        type="text"
+                        id="newParticipantName"
+                        value={newParticipantName}
+                        onChange={(e) => setNewParticipantName(e.target.value)}
+                        required
+                    />
+                </div>
+                <div className="form-group">
+                    <label htmlFor="newParticipantSector">Participant Sector:</label>
+                    <select
+                        id="newParticipantSector"
+                        value={newParticipantSector}
+                        onChange={(e) => setNewParticipantSector(e.target.value)}
+                        required
+                    >
+                        <option value="">-- Select Sector --</option>
+                        {sectors.map(sector => (
+                            <option key={sector.id} value={sector.name}>{sector.name}</option>
+                        ))}
+                    </select>
+                </div>
+                <button className="btn btn-primary" onClick={handleAddNewParticipant}>Add Participant</button>
+            </Modal>
         </div>
     );
 };

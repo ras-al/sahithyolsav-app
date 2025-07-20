@@ -297,8 +297,9 @@ const AdminDashboard = () => {
                     const eventEntry = p.events.find(e => e.eventId === event.id);
                     return {
                         id: p.id,
-                        name: p.name,
+                        name: p.name, // Include name for display
                         code: eventEntry.code || 'N/A',
+                        sector: p.sector || 'N/A', // Include sector
                         originalEvents: p.events // Keep original for updating
                     };
                 }).sort((a, b) => a.name.localeCompare(b.name));
@@ -308,7 +309,8 @@ const AdminDashboard = () => {
                 // Fetch existing marks for this event (if any)
                 const existingMarksQuery = query(
                     collection(db, `artifacts/${appId}/public/data/scores`),
-                    where('eventId', '==', event.id)
+                    where('eventId', '==', event.id),
+                    where('judgeId', '==', 'admin') // Only consider marks from admin
                 );
                 const existingMarksSnapshot = await getDocs(existingMarksQuery);
                 const existingMarksData = {};
@@ -355,7 +357,7 @@ const AdminDashboard = () => {
                     collection(db, `artifacts/${appId}/public/data/scores`),
                     where('eventId', '==', eventToMark.id),
                     where('participantId', '==', participant.id),
-                    where('judgeId', '==', 'admin') // Mark as submitted by admin
+                    where('judgeId', '==', 'admin') // Only consider marks from admin
                 );
                 const existingScoreSnapshot = await getDocs(existingScoreQuery);
 
@@ -449,9 +451,9 @@ const AdminDashboard = () => {
                         await addDoc(collection(db, `artifacts/${appId}/public/data/event_rank_points`), {
                             eventId: event.id,
                             eventName: event.name,
-                            participantId: participant.participantId,
+                            participantId: participant.id,
                             participantName: participantDetails ? participantDetails.name : 'Unknown Participant',
-                            participantSector: participantDetails ? participantDetails.sector : 'Unknown Sector',
+                            participantSector: participantDetails ? participantDetails.sector : 'N/A', // Use N/A if sector is missing
                             participantCategory: event.category,
                             rank: currentRank,
                             pointsAwarded: pointsToAward,
@@ -757,7 +759,7 @@ const AdminDashboard = () => {
                             <div className="admin-marking-list">
                                 {participantsToMark.map(participant => (
                                     <div key={participant.id} className="admin-marking-item form-group">
-                                        <label>{participant.name} ({participant.code}):</label>
+                                        <label>{participant.name} ({participant.code}) - {participant.sector}:</label> {/* Display name, code, and sector */}
                                         <input
                                             type="number"
                                             value={adminMarks[participant.id] !== undefined ? adminMarks[participant.id] : ''}
@@ -1690,7 +1692,6 @@ const AdminDashboard = () => {
 
             <div className="admin-tabs">
                 <button className={`tab-button ${activeTab === 'events' ? 'active' : ''}`} onClick={() => setActiveTab('events')}>Manage Events</button>
-                
                 <button className={`tab-button ${activeTab === 'participants' ? 'active' : ''}`} onClick={() => setActiveTab('participants')}>Manage Participants</button>
                 <button className={`tab-button ${activeTab === 'results' ? 'active' : ''}`} onClick={() => setActiveTab('results')}>Manage Results</button>
                 <button className={`tab-button ${activeTab === 'leaderboard' ? 'active' : ''}`} onClick={() => setActiveTab('leaderboard')}>Manage Leaderboard</button>
@@ -1699,7 +1700,6 @@ const AdminDashboard = () => {
 
             <div className="admin-content">
                 {activeTab === 'events' && <ManageEvents />}
-                {activeTab === 'judges' && <ManageJudges />}
                 {activeTab === 'participants' && <ManageParticipants />}
                 {activeTab === 'results' && <ManageResults />}
                 {activeTab === 'leaderboard' && <ManageLeaderboard />}
