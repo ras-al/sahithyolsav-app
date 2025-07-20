@@ -8,24 +8,14 @@ import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth'; // Explicitly import createUserWithEmailAndPassword and signInWithEmailAndPassword
 import * as XLSX from 'xlsx'; // Import xlsx library
 
-// Define point schemes for leaderboard based on rank
-const RANK_POINT_SCHEMES = {
-    group: {
-        name: "Group Competition (8/5/3)",
-        points: { 1: 8, 2: 5, 3: 3 } // Updated points for group competition
-    },
-    single: {
-        name: "Single Competition (5/3/1)",
-        points: { 1: 5, 2: 3, 3: 1 } // Updated points for single competition
-    }
-};
+// Removed: RANK_POINT_SCHEMES as it's no longer used for point calculation based on rank.
+// const RANK_POINT_SCHEMES = { ... };
 
 const AdminDashboard = () => {
     const { currentUser, db, auth, appId, EVENT_CATEGORIES } = useAuth(); // Destructure 'auth' and EVENT_CATEGORIES from useAuth
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('events'); // Default active tab
     const [message, setMessage] = useState('');
-    // const [judges, setJudges] = useState([]); // Removed: No longer managing judges
     const [events, setEvents] = useState([]);
     const [participants, setParticipants] = useState([]);
     const [sectors, setSectors] = useState([]);
@@ -42,11 +32,6 @@ const AdminDashboard = () => {
     useEffect(() => {
         if (!db) return;
 
-        // Removed: Unsubscribe Judges
-        // const unsubscribeJudges = onSnapshot(collection(db, `artifacts/${appId}/public/data/judges`), (snapshot) => {
-        //     setJudges(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        // }, (error) => console.error("Error fetching judges:", error));
-
         const unsubscribeEvents = onSnapshot(collection(db, `artifacts/${appId}/public/data/events`), (snapshot) => {
             setEvents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         }, (error) => console.error("Error fetching events:", error));
@@ -59,18 +44,16 @@ const AdminDashboard = () => {
             setSectors(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         }, (error) => console.error("Error fetching sectors:", error));
 
-        // New: Fetch Stage Admins
         const unsubscribeStageAdmins = onSnapshot(collection(db, `artifacts/${appId}/public/data/stage_admins`), (snapshot) => {
             setStageAdmins(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         }, (error) => console.error("Error fetching stage admins:", error));
 
 
         return () => {
-            // unsubscribeJudges(); // Removed
             unsubscribeEvents();
             unsubscribeParticipants();
             unsubscribeSectors();
-            unsubscribeStageAdmins(); // Cleanup stage admins listener
+            unsubscribeStageAdmins();
         };
     }, [db, appId]);
 
@@ -114,34 +97,28 @@ const AdminDashboard = () => {
 
     // --- Admin-specific Sub-Components ---
 
-    const ManageEvents = () => {
+    const ManageEvents = ({ setActiveTab }) => { // Receive setActiveTab as prop
         const [eventName, setEventName] = useState('');
         const [eventDate, setEventDate] = useState('');
         const [eventTime, setEventTime] = useState('');
-        const [eventEndTime, setEventEndTime] = useState(''); // New state for End Time
-        // Removed eventLocation state
-        const [eventStageType, setEventStageType] = useState('on-stage'); // 'on-stage' or 'off-stage'
-        const [eventStageNumber, setEventStageNumber] = useState(''); // E.g., 'Stage 1', 'Stage 2'
+        const [eventEndTime, setEventEndTime] = useState('');
+        const [eventStageType, setEventStageType] = useState('on-stage');
+        const [eventStageNumber, setEventStageNumber] = useState('');
         const [eventCategory, setEventCategory] = useState(EVENT_CATEGORIES[0]);
         const [competitionType, setCompetitionType] = useState('single');
-        const [totalMarks, setTotalMarks] = useState(100); // Kept for event metadata, not individual participant marks
-        // const [selectedJudgeIds, setSelectedJudgeIds] = useState([]); // Removed: No longer assigning judges
-        // const [judgeMarkDistribution, setJudgeMarkDistribution] = useState({}); // Removed: No longer managing judge distribution
+        const [totalMarks, setTotalMarks] = useState(100);
         const [isViewScoresModalOpen, setIsViewScoresModalOpen] = useState(false);
         const [scoresForEvent, setScoresForEvent] = useState([]);
         const [selectedEventForScores, setSelectedEventForScores] = useState(null);
         const [editingEventId, setEditingEventId] = useState(null);
-        const [isPublic, setIsPublic] = useState(false); // New state for public visibility
-        const [eventSearchTerm, setEventSearchTerm] = useState(''); // New state for event search
+        const [isPublic, setIsPublic] = useState(false);
+        const [eventSearchTerm, setEventSearchTerm] = useState('');
 
-        // State for Admin Marking Modal
         const [isAdminMarkingModalOpen, setIsAdminMarkingModalOpen] = useState(false);
         const [eventToMark, setEventToMark] = useState(null);
-        const [participantsToMark, setParticipantsToMark] = useState([]); // Participants for the current event being marked
-        const [adminMarks, setAdminMarks] = useState({}); // { participantId: mark }
+        const [participantsToMark, setParticipantsToMark] = useState([]);
+        const [adminMarks, setAdminMarks] = useState({});
 
-
-        // State for Reset Event Modal
         const [isResetModalOpen, setIsResetModalOpen] = useState(false);
         const [resetEventId, setResetEventId] = useState(null);
         const [resetEventName, setResetEventName] = useState('');
@@ -153,20 +130,6 @@ const AdminDashboard = () => {
             e.preventDefault();
             setMessage('');
 
-            // Removed judge assignment validation
-            // if (selectedJudgeIds.length > 3) {
-            //     setMessage("An event can have a maximum of 3 judges.");
-            //     return;
-            // }
-            // const currentJudges = judges.filter(j => selectedJudgeIds.includes(j.id));
-            // const judgesWithNames = currentJudges.map(j => ({ id: j.id, name: j.name }));
-            // const distributedSum = Object.values(judgeMarkDistribution).reduce((sum, val) => sum + (parseInt(val) || 0), 0);
-            // if (distributedSum !== parseInt(totalMarks)) {
-            //     setMessage("Sum of judge marks must equal total marks for the event.");
-            //     return;
-            // }
-
-            // Validation for stage number if on-stage
             if (eventStageType === 'on-stage' && !eventStageNumber.trim()) {
                 setMessage("Stage Number is required for 'On Stage' events.");
                 return;
@@ -177,17 +140,14 @@ const AdminDashboard = () => {
                     name: eventName,
                     date: eventDate,
                     time: eventTime,
-                    endTime: eventEndTime, // Include End Time
-                    // Removed location from eventData
-                    stageType: eventStageType, // 'on-stage' or 'off-stage'
-                    stage: eventStageType === 'on-stage' ? eventStageNumber : 'N/A', // Actual stage name/number
+                    endTime: eventEndTime,
+                    stageType: eventStageType,
+                    stage: eventStageType === 'on-stage' ? eventStageNumber : 'N/A',
                     category: eventCategory,
                     competitionType: competitionType,
-                    totalMarks: parseInt(totalMarks), // Still kept as event metadata
-                    // judges: judgesWithNames, // Removed: No longer assigning judges
-                    // markDistribution: judgeMarkDistribution, // Removed: No longer managing judge distribution
-                    status: 'scheduled', // Default status for new events
-                    isPublic: isPublic // Save public visibility status
+                    totalMarks: parseInt(totalMarks),
+                    status: 'scheduled',
+                    isPublic: isPublic
                 };
 
                 if (editingEventId) {
@@ -198,20 +158,16 @@ const AdminDashboard = () => {
                     await addDoc(collection(db, `artifacts/${appId}/public/data/events`), eventData);
                     setMessage("Event added successfully!");
                 }
-                // Reset form
                 setEventName('');
                 setEventDate('');
                 setEventTime('');
-                setEventEndTime(''); // Reset End Time
-                // Removed setEventLocation
-                setEventStageType('on-stage'); // Reset to default
-                setEventStageNumber(''); // Reset stage number
+                setEventEndTime('');
+                setEventStageType('on-stage');
+                setEventStageNumber('');
                 setEventCategory(EVENT_CATEGORIES[0]);
                 setCompetitionType('single');
                 setTotalMarks(100);
-                // setSelectedJudgeIds([]); // Removed
-                // setJudgeMarkDistribution({}); // Removed
-                setIsPublic(false); // Reset public visibility
+                setIsPublic(false);
             } catch (error) {
                 console.error("Error adding/updating event:", error);
                 setMessage("Failed to add/update event: " + error.message);
@@ -223,23 +179,15 @@ const AdminDashboard = () => {
             setEventName(event.name);
             setEventDate(event.date);
             setEventTime(event.time);
-            setEventEndTime(event.endTime || ''); // Set End Time for editing
-            // Removed event.location from here
+            setEventEndTime(event.endTime || '');
             setEventStageType(event.stageType || 'on-stage');
             setEventStageNumber(event.stageType === 'on-stage' ? (event.stage || '') : '');
             setEventCategory(event.category);
             setCompetitionType(event.competitionType || 'single');
-            setTotalMarks(event.totalMarks); // Still kept as event metadata
-            // setSelectedJudgeIds(event.judges?.map(j => j.id) || []); // Removed
-            // setJudgeMarkDistribution(event.markDistribution || {}); // Removed
-            setIsPublic(event.isPublic || false); // Set public visibility for editing
+            setTotalMarks(event.totalMarks);
+            setIsPublic(event.isPublic || false);
         };
 
-        // Removed handleJudgeSelection and handleMarkDistributionChange as judges are no longer assigned here
-        // const handleJudgeSelection = (e) => { ... };
-        // const handleMarkDistributionChange = (judgeId, value) => { ... };
-
-        // New function to set event status to 'scheduled'
         const handleSetEventToScheduled = async (eventId) => {
             setMessage('');
             try {
@@ -278,15 +226,13 @@ const AdminDashboard = () => {
             }
         };
 
-        // Modified handleViewJudgeScores to handle admin direct marking
         const handleOpenAdminMarkingModal = async (event) => {
             setMessage('');
             setEventToMark(event);
             setIsAdminMarkingModalOpen(true);
-            setAdminMarks({}); // Clear previous marks
+            setAdminMarks({});
 
             try {
-                // Fetch participants relevant to this event
                 const participantsColRef = collection(db, `artifacts/${appId}/public/data/participants`);
                 const allParticipantsSnap = await getDocs(participantsColRef);
                 const allParticipantsData = allParticipantsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -297,26 +243,24 @@ const AdminDashboard = () => {
                     const eventEntry = p.events.find(e => e.eventId === event.id);
                     return {
                         id: p.id,
-                        name: p.name, // Include name for display
+                        name: p.name,
                         code: eventEntry.code || 'N/A',
-                        sector: p.sector || 'N/A', // Include sector
-                        originalEvents: p.events // Keep original for updating
+                        sector: p.sector || 'N/A',
+                        originalEvents: p.events
                     };
                 }).sort((a, b) => a.name.localeCompare(b.name));
 
                 setParticipantsToMark(relevantParticipants);
 
-                // Fetch existing marks for this event (if any)
                 const existingMarksQuery = query(
                     collection(db, `artifacts/${appId}/public/data/scores`),
                     where('eventId', '==', event.id),
-                    where('judgeId', '==', 'admin') // Only consider marks from admin
+                    where('judgeId', '==', 'admin')
                 );
                 const existingMarksSnapshot = await getDocs(existingMarksQuery);
                 const existingMarksData = {};
                 existingMarksSnapshot.docs.forEach(doc => {
                     const data = doc.data();
-                    // Assuming one score per participant from Admin
                     existingMarksData[data.participantId] = data.marks;
                 });
                 setAdminMarks(existingMarksData);
@@ -338,7 +282,7 @@ const AdminDashboard = () => {
         const handleSubmitAdminMarks = async () => {
             setMessage('');
             if (!eventToMark) {
-                setResetMessage("No event selected for marking.");
+                setMessage("No event selected for marking.");
                 return;
             }
 
@@ -347,16 +291,13 @@ const AdminDashboard = () => {
 
             for (const participant of participantsToMark) {
                 const mark = adminMarks[participant.id];
-                // Allow empty/NaN marks to be treated as 0 or simply not stored if undefined
                 const finalMark = (mark === undefined || mark === null || isNaN(mark)) ? 0 : mark;
 
-
-                // Check if a score already exists for this participant in this event (from admin)
                 const existingScoreQuery = query(
                     collection(db, `artifacts/${appId}/public/data/scores`),
                     where('eventId', '==', eventToMark.id),
                     where('participantId', '==', participant.id),
-                    where('judgeId', '==', 'admin') // Only consider marks from admin
+                    where('judgeId', '==', 'admin')
                 );
                 const existingScoreSnapshot = await getDocs(existingScoreQuery);
 
@@ -365,17 +306,17 @@ const AdminDashboard = () => {
                     eventName: eventToMark.name,
                     participantId: participant.id,
                     participantName: participant.name,
-                    judgeId: 'admin', // Mark as submitted by admin
-                    judgeName: 'Admin', // Admin's name for score record
+                    judgeId: 'admin',
+                    judgeName: 'Admin',
                     marks: finalMark,
                     timestamp: new Date().toISOString()
                 };
 
                 if (existingScoreSnapshot.empty) {
-                    await addDoc(collection(db, `artifacts/${appId}/public/data/scores`), scoreData);
+                    batch.set(doc(collection(db, `artifacts/${appId}/public/data/scores`)), scoreData);
                 } else {
                     const scoreDocRef = doc(db, `artifacts/${appId}/public/data/scores`, existingScoreSnapshot.docs[0].id);
-                    await updateDoc(scoreDocRef, scoreData);
+                    batch.update(scoreDocRef, scoreData);
                 }
                 marksSubmittedCount++;
             }
@@ -383,10 +324,15 @@ const AdminDashboard = () => {
             try {
                 await batch.commit();
                 setMessage(`Marks submitted for ${marksSubmittedCount} participants in ${eventToMark.name}!`);
+                
+                // Automatically process ranks after submitting marks
+                await handleProcessEventRanks(eventToMark); 
+
                 setIsAdminMarkingModalOpen(false);
                 setEventToMark(null);
                 setParticipantsToMark([]);
                 setAdminMarks({});
+                setActiveTab('results'); // Automatically switch to results tab
             } catch (error) {
                 console.error("Error submitting admin marks:", error);
                 setMessage("Failed to submit marks: " + error.message);
@@ -398,25 +344,17 @@ const AdminDashboard = () => {
             setMessage('');
             try {
                 const competitionTypeKey = event.competitionType || 'single';
-                const currentRankPoints = RANK_POINT_SCHEMES[competitionTypeKey]?.points;
 
-                if (!currentRankPoints) {
-                    setMessage(`Error: No point scheme defined for competition type '${competitionTypeKey}'.`);
-                    return;
-                }
-
-                // Fetch scores submitted by admin for this event
                 const scoresQuery = query(
                     collection(db, `artifacts/${appId}/public/data/scores`),
                     where('eventId', '==', event.id),
-                    where('judgeId', '==', 'admin') // Only consider marks from admin
+                    where('judgeId', '==', 'admin')
                 );
                 const scoresSnapshot = await getDocs(scoresQuery);
                 const scoresData = scoresSnapshot.docs.map(doc => doc.data());
 
                 const participantTotalScores = {};
                 scoresData.forEach(score => {
-                    // Since admin directly assigns total marks, no need for averaging multiple judges
                     participantTotalScores[score.participantId] = score.marks;
                 });
 
@@ -424,7 +362,6 @@ const AdminDashboard = () => {
                     .map(([participantId, totalScore]) => ({ participantId, totalScore }))
                     .sort((a, b) => b.totalScore - a.totalScore);
 
-                // Clear existing rank points for this event
                 const existingRankPointsQuery = query(
                     collection(db, `artifacts/${appId}/public/data/event_rank_points`),
                     where('eventId', '==', event.id)
@@ -433,50 +370,83 @@ const AdminDashboard = () => {
                 const deletePromises = existingRankPointsSnapshot.docs.map(doc => deleteDoc(doc.ref));
                 await Promise.all(deletePromises);
 
+                const batch = writeBatch(db);
+
+                const placementsToSave = [];
+                let previousScore = null;
+                let currentRank = 0;
+
                 for (let i = 0; i < rankedParticipants.length; i++) {
                     const participant = rankedParticipants[i];
                     const participantDetails = participants.find(p => p.id === participant.participantId);
 
-                    let currentRank = 0;
-                    if (i > 0 && participant.totalScore === rankedParticipants[i - 1].totalScore) {
-                        currentRank = rankedParticipants[i - 1].rank;
-                    } else {
+                    if (participant.totalScore !== previousScore) {
                         currentRank = i + 1;
                     }
+                    
+                    const pointsToAward = participant.totalScore; // Raw score as points for leaderboard contribution
 
-                    const pointsToAward = currentRankPoints[currentRank] || 0;
+                    // Always add all ranked participants to event_rank_points
+                    batch.set(doc(collection(db, `artifacts/${appId}/public/data/event_rank_points`)), {
+                        eventId: event.id,
+                        eventName: event.name,
+                        participantId: participant.participantId,
+                        participantName: participantDetails ? participantDetails.name : 'Unknown Participant',
+                        participantSector: participantDetails ? participantDetails.sector : 'N/A',
+                        participantCategory: event.category,
+                        rank: currentRank,
+                        pointsAwarded: pointsToAward,
+                        participantEventTotalScore: participant.totalScore,
+                        competitionType: competitionTypeKey,
+                        timestamp: new Date().toISOString()
+                    });
 
-                    if (pointsToAward > 0) {
-                        await addDoc(collection(db, `artifacts/${appId}/public/data/event_rank_points`), {
-                            eventId: event.id,
-                            eventName: event.name,
-                            participantId: participant.id,
-                            participantName: participantDetails ? participantDetails.name : 'Unknown Participant',
-                            participantSector: participantDetails ? participantDetails.sector : 'N/A', // Use N/A if sector is missing
-                            participantCategory: event.category,
+                    // Only save top 3 for placements in results collection
+                    if (currentRank <= 3) {
+                        placementsToSave.push({
                             rank: currentRank,
+                            participantId: participant.participantId,
+                            participantName: participantDetails ? participantDetails.name : 'Unknown Participant',
                             pointsAwarded: pointsToAward,
-                            participantEventTotalScore: participant.totalScore,
-                            competitionType: competitionTypeKey,
-                            timestamp: new Date().toISOString()
+                            totalJudgeScore: participant.totalScore
                         });
                     }
+                    previousScore = participant.totalScore;
                 }
-                setMessage(`Ranks processed for event: ${event.name}. Remember to recalculate leaderboard.`);
+                await batch.commit();
+
+                const resultsCollectionRef = collection(db, `artifacts/${appId}/public/data/results`);
+                const existingResultQuery = query(resultsCollectionRef, where('eventId', '==', event.id));
+                const existingResultSnapshot = await getDocs(existingResultQuery);
+
+                const resultData = {
+                    eventId: event.id,
+                    eventName: event.name,
+                    categoryName: event.category,
+                    competitionType: competitionTypeKey,
+                    placements: placementsToSave,
+                    timestamp: new Date().toISOString()
+                };
+
+                if (existingResultSnapshot.empty) {
+                    await addDoc(resultsCollectionRef, resultData);
+                } else {
+                    const resultDocRef = doc(db, `artifacts/${appId}/public/data/results`, existingResultSnapshot.docs[0].id);
+                    await updateDoc(resultDocRef, resultData);
+                }
+
+                setMessage(`Ranks processed and results data updated for event: ${event.name}.`);
             } catch (error) {
                 console.error("Error processing event ranks:", error);
                 setMessage("Failed to process event ranks: " + error.message);
             }
         };
 
-        // Removed handleDownloadPoster as it's replaced by Reset Event
-        // const handleDownloadPoster = (base64Data, eventName) => { ... };
-
         const handleOpenResetModal = (eventId, eventName) => {
             setResetEventId(eventId);
             setResetEventName(eventName);
-            setAdminPassword(''); // Clear password field
-            setResetMessage(''); // Clear any previous reset messages
+            setAdminPassword('');
+            setResetMessage('');
             setIsResetModalOpen(true);
         };
 
@@ -492,13 +462,10 @@ const AdminDashboard = () => {
             }
 
             try {
-                // Re-authenticate the admin user
                 await signInWithEmailAndPassword(auth, currentUser.email, adminPassword);
 
-                // Start batch operation
                 const batch = writeBatch(db);
 
-                // 1. Delete all scores for this event
                 const scoresQuery = query(
                     collection(db, `artifacts/${appId}/public/data/scores`),
                     where('eventId', '==', resetEventId)
@@ -508,7 +475,6 @@ const AdminDashboard = () => {
                     batch.delete(doc.ref);
                 });
 
-                // 2. Delete all event_rank_points for this event
                 const rankPointsQuery = query(
                     collection(db, `artifacts/${appId}/public/data/event_rank_points`),
                     where('eventId', '==', resetEventId)
@@ -518,7 +484,6 @@ const AdminDashboard = () => {
                     batch.delete(doc.ref);
                 });
 
-                // 3. Delete any existing results for this event
                 const resultsQuery = query(
                     collection(db, `artifacts/${appId}/public/data/results`),
                     where('eventId', '==', resetEventId)
@@ -528,11 +493,9 @@ const AdminDashboard = () => {
                     batch.delete(doc.ref);
                 });
 
-                // 4. Update the event status to 'scheduled'
                 const eventDocRef = doc(db, `artifacts/${appId}/public/data/events`, resetEventId);
                 batch.update(eventDocRef, { status: 'scheduled' });
 
-                // Commit the batch
                 await batch.commit();
 
                 setResetMessage(`Event "${resetEventName}" successfully reset! All scores, ranks, and results cleared, and event status set to 'scheduled'.`);
@@ -550,7 +513,6 @@ const AdminDashboard = () => {
             }
         };
 
-        // Filter events based on search term
         const filteredEvents = events.filter(event =>
             event.name.toLowerCase().includes(eventSearchTerm.toLowerCase()) ||
             event.category.toLowerCase().includes(eventSearchTerm.toLowerCase()) ||
@@ -584,16 +546,15 @@ const AdminDashboard = () => {
                         <input type="time" value={eventTime} onChange={(e) => setEventTime(e.target.value)} required />
                     </div>
                     <div className="form-group">
-                        <label>End Time:</label> {/* New End Time field */}
+                        <label>End Time:</label>
                         <input type="time" value={eventEndTime} onChange={(e) => setEventEndTime(e.target.value)} />
                     </div>
-                    {/* Removed Location input field */}
                     <div className="form-group">
                         <label>Stage Type:</label>
                         <select value={eventStageType} onChange={(e) => {
                             setEventStageType(e.target.value);
                             if (e.target.value === 'off-stage') {
-                                setEventStageNumber(''); // Clear stage number if off-stage
+                                setEventStageNumber('');
                             }
                         }} required>
                             <option value="on-stage">On Stage</option>
@@ -630,7 +591,6 @@ const AdminDashboard = () => {
                         <label>Total Marks:</label>
                         <input type="number" value={totalMarks} onChange={(e) => setTotalMarks(e.target.value)} min="1" required />
                     </div>
-                    {/* Removed Assign Judges and Mark Distribution fields */}
                     <div className="form-group checkbox-group">
                         <input
                             type="checkbox"
@@ -646,16 +606,13 @@ const AdminDashboard = () => {
                         setEventName('');
                         setEventDate('');
                         setEventTime('');
-                        setEventEndTime(''); // Reset End Time
-                        // Removed setEventLocation
+                        setEventEndTime('');
                         setEventStageType('on-stage');
                         setEventStageNumber('');
                         setEventCategory(EVENT_CATEGORIES[0]);
                         setCompetitionType('single');
                         setTotalMarks(100);
-                        // setSelectedJudgeIds([]); // Removed
-                        // setJudgeMarkDistribution({}); // Removed
-                        setIsPublic(false); // Reset public visibility
+                        setIsPublic(false);
                     }}>Cancel Edit</button>}
                 </form>
 
@@ -681,14 +638,11 @@ const AdminDashboard = () => {
                                     {eventsInCat.map(event => (
                                         <div key={event.id} className="list-card event-list-card">
                                             <p><strong>{event.name}</strong> ({event.category})</p>
-                                            <p>Date: {event.date}, Time: {event.time} {event.endTime ? `- ${event.endTime}` : ''}</p> {/* Display End Time */}
-                                            {/* Removed Location display */}
+                                            <p>Date: {event.date}, Time: {event.time} {event.endTime ? `- ${event.endTime}` : ''}</p>
                                             <p>Stage Type: {event.stageType || 'N/A'}, Stage: {event.stage || 'N/A'}, Type: {event.competitionType || 'N/A'}, Total Marks: {event.totalMarks}</p>
-                                            {/* Removed Judges and Mark Distribution display */}
                                             <p>Status: <span className={`event-status ${event.status}`}>{event.status}</span></p>
                                             <p>Public: <span className={`event-status ${event.isPublic ? 'live' : 'over'}`}>{event.isPublic ? 'Yes' : 'No'}</span></p>
                                             <div className="card-actions">
-                                                {/* New: Set Scheduled button */}
                                                 <button
                                                     className="btn btn-secondary"
                                                     onClick={() => handleSetEventToScheduled(event.id)}
@@ -696,7 +650,6 @@ const AdminDashboard = () => {
                                                 >
                                                     Set Scheduled
                                                 </button>
-                                                {/* Removed Set Live/Set Over buttons - now handled by Stage Admin */}
                                                 <button
                                                     className={`btn ${event.isPublic ? 'btn-danger' : 'btn-info'}`}
                                                     onClick={() => handleTogglePublic(event.id, event.isPublic)}
@@ -717,18 +670,10 @@ const AdminDashboard = () => {
                                                 </button>
                                                 <button
                                                     className="btn btn-primary"
-                                                    onClick={() => handleOpenAdminMarkingModal(event)} // New button to open marking modal
+                                                    onClick={() => handleOpenAdminMarkingModal(event)}
                                                 >
                                                     Add/Edit Marks
                                                 </button>
-                                                <button
-                                                    className="btn btn-primary"
-                                                    onClick={() => handleProcessEventRanks(event)}
-                                                    disabled={event.status !== 'live' && event.status !== 'over'}
-                                                >
-                                                    Process Event Ranks
-                                                </button>
-                                                {/* Replaced Download Poster with Reset Event */}
                                                 <button
                                                     className="btn btn-warn btn-small"
                                                     onClick={() => handleOpenResetModal(event.id, event.name)}
@@ -758,13 +703,12 @@ const AdminDashboard = () => {
                             <div className="admin-marking-list">
                                 {participantsToMark.map(participant => (
                                     <div key={participant.id} className="admin-marking-item form-group">
-                                        <label>{participant.name} ({participant.code}) - {participant.sector}:</label> {/* Display name, code, and sector */}
+                                        <label>{participant.name} ({participant.code}) - {participant.sector}:</label>
                                         <input
                                             type="number"
                                             value={adminMarks[participant.id] !== undefined ? adminMarks[participant.id] : ''}
                                             onChange={(e) => handleAdminMarkChange(participant.id, e.target.value)}
                                             min="0"
-                                            // Removed max attribute: allowing custom marks
                                         />
                                     </div>
                                 ))}
@@ -830,10 +774,9 @@ const AdminDashboard = () => {
             e.preventDefault();
             setMessage('');
             try {
-                // Participants added by Admin will initially have empty codes
                 const eventsForParticipant = selectedEvents.map(eventId => ({
                     eventId: eventId,
-                    code: '' // Code is initially empty, to be filled by Stage Admin
+                    code: ''
                 }));
 
                 const participantData = {
@@ -959,15 +902,13 @@ const AdminDashboard = () => {
                     let errorCount = 0;
 
                     for (const row of json) {
-                        // Basic validation and mapping for participant data
-                        // Ensure all values are converted to string before trim(), and age is safely parsed
                         const name = String(row['Name'] || '').trim();
                         const participantClass = String(row['Class'] || '').trim();
-                        const age = parseInt(row['Age']); // parseInt handles non-numeric safely, returns NaN
+                        const age = parseInt(row['Age']);
                         const sector = String(row['Sector'] || '').trim();
                         const unit = String(row['Unit'] || '').trim();
                         const category = String(row['Category'] || '').trim();
-                        const eventNames = String(row['Events'] || '').split(',').map(e => e.trim()).filter(Boolean); // Comma-separated event names
+                        const eventNames = String(row['Events'] || '').split(',').map(e => e.trim()).filter(Boolean);
 
                         if (!name || !participantClass || isNaN(age) || !sector || !unit || !category) {
                             console.warn("Skipping row due to missing or invalid required fields:", row);
@@ -975,15 +916,10 @@ const AdminDashboard = () => {
                             continue;
                         }
 
-                        // Find event IDs based on names
                         const eventsForParticipant = eventNames.map(eventName => {
                             const foundEvent = events.find(e => e.name.toLowerCase() === eventName.toLowerCase() && e.category.toLowerCase() === category.toLowerCase());
                             return foundEvent ? { eventId: foundEvent.id, code: '' } : null;
-                        }).filter(Boolean); // Filter out nulls if event not found
-
-                        if (eventsForParticipant.length === 0 && eventNames.length > 0) {
-                            console.warn(`No matching events found for participant ${name} in category ${category} with events ${eventNames.join(', ')}. Participant will be added without events.`);
-                        }
+                        }).filter(Boolean);
 
                         const participantData = {
                             name,
@@ -995,9 +931,6 @@ const AdminDashboard = () => {
                             events: eventsForParticipant,
                         };
 
-                        // Check if participant already exists (e.g., by name and category, or a unique ID if available)
-                        // For simplicity, let's assume `name` is unique enough for this upload context.
-                        // In a real app, you might use a generated unique ID or a combination of fields.
                         const existingParticipantQuery = query(
                             participantsCollectionRef,
                             where('name', '==', name),
@@ -1007,7 +940,6 @@ const AdminDashboard = () => {
 
                         if (!existingParticipantSnapshot.empty) {
                             const existingDoc = existingParticipantSnapshot.docs[0];
-                            // Merge existing events with new ones, avoiding duplicates
                             const currentEvents = existingDoc.data().events || [];
                             const newEvents = [...currentEvents];
                             eventsForParticipant.forEach(newEvent => {
@@ -1018,7 +950,6 @@ const AdminDashboard = () => {
                             batch.update(existingDoc.ref, { ...participantData, events: newEvents });
                             updatedCount++;
                         } else {
-                            // Corrected: Use batch.set with a new document reference
                             batch.set(doc(participantsCollectionRef), participantData);
                             addedCount++;
                         }
@@ -1026,8 +957,6 @@ const AdminDashboard = () => {
 
                     await batch.commit();
                     setMessage(`Excel upload complete! Added: ${addedCount}, Updated: ${updatedCount}, Skipped/Errors: ${errorCount}.`);
-                    // Refresh participant list after upload
-                    // The onSnapshot listener will automatically update the state, so no manual fetch needed.
                 } catch (error) {
                     console.error("Error processing Excel file:", error);
                     setMessage("Failed to process Excel file: " + error.message);
@@ -1037,7 +966,6 @@ const AdminDashboard = () => {
         };
 
 
-        // Filter participants based on search term
         const filteredParticipants = participants.filter(p =>
             p.name.toLowerCase().includes(participantSearchTerm.toLowerCase()) ||
             p.sector.toLowerCase().includes(participantSearchTerm.toLowerCase()) ||
@@ -1052,7 +980,7 @@ const AdminDashboard = () => {
             const eventsInThisCategory = events.filter(e => e.category === category);
 
             eventsInThisCategory.forEach(event => {
-                const participantsForThisEvent = filteredParticipants.filter(p => // Use filteredParticipants here
+                const participantsForThisEvent = filteredParticipants.filter(p =>
                     p.category === category &&
                     p.events && p.events.some(e => e.eventId === event.id)
                 );
@@ -1247,7 +1175,7 @@ const AdminDashboard = () => {
         const [processedRankedParticipants, setProcessedRankedParticipants] = useState([]);
         const [posterBase64, setPosterBase64] = useState('');
         const [results, setResults] = useState([]);
-        const [eventResultSearchTerm, setEventResultSearchTerm] = useState(''); // New state for event result search
+        const [eventResultSearchTerm, setEventResultSearchTerm] = useState('');
 
         const [currentPlacements, setCurrentPlacements] = useState({
             1: null,
@@ -1255,16 +1183,9 @@ const AdminDashboard = () => {
             3: null
         });
 
+        // Effect to fetch processed ranks when selectedEventId changes
         useEffect(() => {
-            if (!db) return;
-            const unsubscribe = onSnapshot(collection(db, `artifacts/${appId}/public/data/results`), (snapshot) => {
-                setResults(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-            }, (error) => console.error("Error fetching results:", error));
-            return () => unsubscribe();
-        }, [db, appId]);
-
-        useEffect(() => {
-            const fetchRankedParticipants = async () => {
+            const fetchProcessedRanksForDisplay = async () => {
                 if (!db || !selectedEventId) {
                     setProcessedRankedParticipants([]);
                     setCurrentPlacements({ 1: null, 2: null, 3: null });
@@ -1277,9 +1198,25 @@ const AdminDashboard = () => {
                         where('eventId', '==', selectedEventId)
                     );
                     const snapshot = await getDocs(q);
-                    const fetchedParticipants = snapshot.docs.map(doc => doc.data());
-                    setProcessedRankedParticipants(fetchedParticipants);
+                    const fetchedRanks = snapshot.docs.map(doc => doc.data());
+                    setProcessedRankedParticipants(fetchedRanks);
 
+                    // Populate currentPlacements for display based on fetched ranks
+                    const newPlacements = { 1: null, 2: null, 3: null };
+                    fetchedRanks.forEach(p => {
+                        if (p.rank >= 1 && p.rank <= 3) {
+                            newPlacements[p.rank] = {
+                                rank: p.rank,
+                                participantId: p.participantId,
+                                participantName: p.participantName,
+                                pointsAwarded: p.pointsAwarded,
+                                totalJudgeScore: p.participantEventTotalScore
+                            };
+                        }
+                    });
+                    setCurrentPlacements(newPlacements);
+
+                    // Also set poster if it exists for this event in results collection
                     const existingResult = results.find(r => r.eventId === selectedEventId);
                     if (existingResult && existingResult.posterBase64) {
                         setPosterBase64(existingResult.posterBase64);
@@ -1288,12 +1225,21 @@ const AdminDashboard = () => {
                     }
 
                 } catch (error) {
-                    console.error("Error fetching ranked participants for results:", error);
-                    setMessage("Failed to load ranked participants for this event.");
+                    console.error("Error fetching processed ranks for display:", error);
+                    setMessage("Failed to load processed ranks for this event.");
                 }
             };
-            fetchRankedParticipants();
-        }, [db, appId, selectedEventId, results]);
+            fetchProcessedRanksForDisplay();
+        }, [db, appId, selectedEventId, results]); // Added results to dependency to react to result changes
+
+
+        useEffect(() => {
+            if (!db) return;
+            const unsubscribe = onSnapshot(collection(db, `artifacts/${appId}/public/data/results`), (snapshot) => {
+                setResults(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            }, (error) => console.error("Error fetching results:", error));
+            return () => unsubscribe();
+        }, [db, appId]);
 
 
         const handlePosterUpload = (e) => {
@@ -1318,19 +1264,20 @@ const AdminDashboard = () => {
                     return;
                 }
                 if (processedRankedParticipants.length === 0) {
-                    setMessage("No processed ranks available for this event. Please process ranks first.");
+                    setMessage("No processed ranks available for this event. Please go to 'Manage Events' and click 'Add/Edit Marks' to submit marks and process ranks.");
                     return;
                 }
 
                 const placementsToSave = [];
                 for (let i = 1; i <= 3; i++) {
-                    if (currentPlacements[i]) {
+                    const participantWithRank = processedRankedParticipants.find(p => p.rank === i);
+                    if (participantWithRank) {
                         placementsToSave.push({
                             rank: i,
-                            participantId: currentPlacements[i].participantId,
-                            participantName: currentPlacements[i].participantName,
-                            pointsAwarded: currentPlacements[i].pointsAwarded,
-                            totalJudgeScore: currentPlacements[i].totalJudgeScore
+                            participantId: participantWithRank.participantId,
+                            participantName: participantWithRank.participantName,
+                            pointsAwarded: participantWithRank.pointsAwarded,
+                            totalJudgeScore: participantWithRank.participantEventTotalScore
                         });
                     }
                 }
@@ -1386,7 +1333,6 @@ const AdminDashboard = () => {
             }
         };
 
-        // Filter events for the dropdown based on search term
         const filteredEventsForDropdown = events.filter(event =>
             event.name.toLowerCase().includes(eventResultSearchTerm.toLowerCase()) ||
             event.category.toLowerCase().includes(eventResultSearchTerm.toLowerCase())
@@ -1424,8 +1370,8 @@ const AdminDashboard = () => {
                                         return (
                                             <div key={rank} className="rank-display-item">
                                                 <strong>{rank} Place:</strong> {' '}
-                                                {currentPlacements[rank] ? (
-                                                    `${currentPlacements[rank].participantName} (${currentPlacements[rank].pointsAwarded} points, Total Score: ${currentPlacements[rank].totalJudgeScore})`
+                                                {participant ? (
+                                                    `${participant.participantName} (${participant.totalScore} marks)`
                                                 ) : (
                                                     <span style={{ color: '#888' }}>Not Awarded</span>
                                                 )}
@@ -1434,9 +1380,9 @@ const AdminDashboard = () => {
                                     })}
                                 </div>
                             ) : (
-                                <p className="warn-message">No processed ranks found for this event. Please go to "Manage Events" and click "Process Event Ranks" for the selected event.</p>
+                                <p className="warn-message">No processed ranks found for this event. Please go to "Manage Events" and click "Add/Edit Marks" to submit marks and process ranks.</p>
                             )}
-                            <small>These ranks are based on "Process Event Ranks".</small>
+                            <small>These ranks are based on the marks entered by Admin.</small>
                         </div>
                     )}
 
@@ -1483,9 +1429,6 @@ const AdminDashboard = () => {
     };
 
     const ManageLeaderboard = () => {
-        // The point scheme selection is removed as requested.
-        // The recalculate button remains.
-
         const handleRecalculateLeaderboard = async () => {
             setMessage('Recalculating leaderboard...');
             try {
@@ -1551,8 +1494,8 @@ const AdminDashboard = () => {
         );
     };
 
-    const ManageStageAdmins = () => { // New component for managing stage admins
-        const [stageName, setStageName] = useState(''); // Changed from stageAdminName
+    const ManageStageAdmins = () => {
+        const [stageName, setStageName] = useState('');
         const [stageAdminPassword, setStageAdminPassword] = useState('');
         const [editingStageAdminId, setEditingStageAdminId] = useState(null);
 
@@ -1568,14 +1511,12 @@ const AdminDashboard = () => {
                 return;
             }
 
-            // Derive stageAdminEmail from stageName (e.g., "Stage 1" -> "stage1@stage.com")
             const derivedStageAdminEmail = `${stageName.toLowerCase().replace(/\s/g, '')}@stage.com`;
 
             try {
                 if (editingStageAdminId) {
-                    // For editing, we only allow updating the name. Email and assignedStage are not changed here.
                     await updateDoc(doc(db, `artifacts/${appId}/public/data/stage_admins`, editingStageAdminId), {
-                        name: stageName, // Update name
+                        name: stageName,
                     });
                     setMessage(`Stage Admin for "${stageName}" updated successfully.`);
                     setEditingStageAdminId(null);
@@ -1584,9 +1525,9 @@ const AdminDashboard = () => {
                     const stageAdminUid = userCredential.user.uid;
 
                     await setDoc(doc(db, `artifacts/${appId}/public/data/stage_admins`, stageAdminUid), {
-                        name: stageName, // Store the user-friendly stage name
-                        email: derivedStageAdminEmail, // Store the derived email
-                        assignedStage: stageName, // Store the stage name as assignedStage
+                        name: stageName,
+                        email: derivedStageAdminEmail,
+                        assignedStage: stageName,
                         createdAt: new Date().toISOString()
                     });
                     setMessage(`Stage Admin for "${stageName}" created successfully! Login Email: ${derivedStageAdminEmail}. Password is NOT stored.`);
@@ -1605,8 +1546,8 @@ const AdminDashboard = () => {
 
         const handleEditStageAdmin = (stageAdmin) => {
             setEditingStageAdminId(stageAdmin.id);
-            setStageName(stageAdmin.name); // Set the stage name for editing
-            setStageAdminPassword(''); // Password is not editable
+            setStageName(stageAdmin.name);
+            setStageAdminPassword('');
         };
 
         const handleDeleteStageAdmin = async (stageAdminId, stageAdminEmailToDelete) => {
@@ -1698,11 +1639,11 @@ const AdminDashboard = () => {
             </div>
 
             <div className="admin-content">
-                {activeTab === 'events' && <ManageEvents />}
+                {activeTab === 'events' && <ManageEvents setActiveTab={setActiveTab} />}
                 {activeTab === 'participants' && <ManageParticipants />}
                 {activeTab === 'results' && <ManageResults />}
                 {activeTab === 'leaderboard' && <ManageLeaderboard />}
-                {activeTab === 'stageAdmins' && <ManageStageAdmins />} {/* Render new component */}
+                {activeTab === 'stageAdmins' && <ManageStageAdmins />}
             </div>
         </div>
     );
