@@ -124,9 +124,9 @@ const ResultsPage = () => {
                                     <tr>
                                         <th>Event</th>
                                         <th>Competition Type</th>
-                                        <th>1st Place (Name & Sector)</th> {/* Updated header */}
-                                        <th>2nd Place (Name & Sector)</th> {/* Updated header */}
-                                        <th>3rd Place (Name & Sector)</th> {/* Updated header */}
+                                        <th>1st Place (Name & Sector)</th>
+                                        <th>2nd Place (Name & Sector)</th>
+                                        <th>3rd Place (Name & Sector)</th>
                                         <th>Poster</th>
                                     </tr>
                                 </thead>
@@ -137,14 +137,18 @@ const ResultsPage = () => {
                                             <td>{eventDetails.competitionType || 'N/A'}</td>
                                             {[1, 2, 3].map(rank => {
                                                 const placement = publishedResult?.placements?.find(p => p.rank === rank);
-                                                // Find the participant's sector using their ID from the global participants list
                                                 const participantDetails = participants.find(p => p.id === placement?.participantId);
                                                 const participantSector = participantDetails ? participantDetails.sector : 'N/A';
 
                                                 return (
                                                     <td key={rank}>
                                                         {placement ? (
-                                                            `${placement.participantName} (${participantSector}) (${placement.pointsAwarded} pts)` // Display name, sector, and points
+                                                            // Display "Absent" if pointsAwarded is 0, otherwise display name, sector, and points
+                                                            placement.pointsAwarded === 0 ? (
+                                                                <span className="no-published-text">Absent</span>
+                                                            ) : (
+                                                                `${placement.participantName} (${participantSector}) (${placement.pointsAwarded} pts)`
+                                                            )
                                                         ) : (
                                                             <span className="no-published-text">No Published</span>
                                                         )}
