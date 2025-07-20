@@ -206,7 +206,8 @@ const AdminDashboard = () => {
                 const eventDocRef = doc(db, `artifacts/${appId}/public/data/events`, eventId);
                 await updateDoc(eventDocRef, { isPublic: !currentIsPublic });
                 setMessage(`Event public visibility toggled to "${!currentIsPublic}"!`);
-            } catch (error) {
+            }
+            catch (error) {
                 console.error("Error toggling public status:", error);
                 setMessage("Failed to toggle public status: " + error.message);
             }
@@ -325,14 +326,13 @@ const AdminDashboard = () => {
                 await batch.commit();
                 setMessage(`Marks submitted for ${marksSubmittedCount} participants in ${eventToMark.name}!`);
                 
-                // Automatically process ranks after submitting marks
                 await handleProcessEventRanks(eventToMark); 
 
                 setIsAdminMarkingModalOpen(false);
                 setEventToMark(null);
                 setParticipantsToMark([]);
                 setAdminMarks({});
-                setActiveTab('results'); // Automatically switch to results tab
+                setActiveTab('results');
             } catch (error) {
                 console.error("Error submitting admin marks:", error);
                 setMessage("Failed to submit marks: " + error.message);
@@ -358,9 +358,27 @@ const AdminDashboard = () => {
                     participantTotalScores[score.participantId] = score.marks;
                 });
 
-                const rankedParticipants = Object.entries(participantTotalScores)
+                const sortedParticipantsByScore = Object.entries(participantTotalScores)
                     .map(([participantId, totalScore]) => ({ participantId, totalScore }))
-                    .sort((a, b) => b.totalScore - a.totalScore);
+                    .sort((a, b) => b.totalScore - a.totalScore); // Sort descending by score
+
+                // Calculate ranks with standard competition ranking (1, 2, 2, 3...)
+                const rankedParticipants = [];
+                let currentRank = 1; // Rank to be displayed
+                let previousScore = -1; // Initialize with a score lower than any possible mark
+
+                for (let i = 0; i < sortedParticipantsByScore.length; i++) {
+                    const participant = sortedParticipantsByScore[i];
+                    
+                    // If current score is strictly less than previous score, increment rank
+                    if (participant.totalScore < previousScore) { 
+                        currentRank = i + 1; 
+                    }
+                    
+                    rankedParticipants.push({ ...participant, rank: currentRank });
+                    previousScore = participant.totalScore; // Update previous score for next iteration
+                }
+
 
                 const existingRankPointsQuery = query(
                     collection(db, `artifacts/${appId}/public/data/event_rank_points`),
@@ -373,18 +391,16 @@ const AdminDashboard = () => {
                 const batch = writeBatch(db);
 
                 const placementsToSave = [];
-                let previousScore = null;
-                let currentRank = 0;
+                
+                // Collect top 3 distinct ranks for results display
+                const distinctRanksCollected = new Set(); // To track distinct ranks (1st, 2nd, 3rd)
+                let distinctRankCount = 0;
 
                 for (let i = 0; i < rankedParticipants.length; i++) {
                     const participant = rankedParticipants[i];
                     const participantDetails = participants.find(p => p.id === participant.participantId);
 
-                    if (participant.totalScore !== previousScore) {
-                        currentRank = i + 1;
-                    }
-                    
-                    const pointsToAward = participant.totalScore; // Raw score as points for leaderboard contribution
+                    const pointsToAward = participant.totalScore; // Raw score used for leaderboard contribution
 
                     // Always add all ranked participants to event_rank_points
                     batch.set(doc(collection(db, `artifacts/${appId}/public/data/event_rank_points`)), {
@@ -394,24 +410,27 @@ const AdminDashboard = () => {
                         participantName: participantDetails ? participantDetails.name : 'Unknown Participant',
                         participantSector: participantDetails ? participantDetails.sector : 'N/A',
                         participantCategory: event.category,
-                        rank: currentRank,
+                        rank: participant.rank, // Use the calculated rank
                         pointsAwarded: pointsToAward,
                         participantEventTotalScore: participant.totalScore,
                         competitionType: competitionTypeKey,
                         timestamp: new Date().toISOString()
                     });
 
-                    // Only save top 3 for placements in results collection
-                    if (currentRank <= 3) {
+                    // Only save top 3 distinct ranks for placements in results collection
+                    if (distinctRankCount < 3) {
+                        if (!distinctRanksCollected.has(participant.rank)) {
+                            distinctRanksCollected.add(participant.rank);
+                            distinctRankCount++;
+                        }
                         placementsToSave.push({
-                            rank: currentRank,
+                            rank: participant.rank,
                             participantId: participant.participantId,
                             participantName: participantDetails ? participantDetails.name : 'Unknown Participant',
                             pointsAwarded: pointsToAward,
                             totalJudgeScore: participant.totalScore
                         });
                     }
-                    previousScore = participant.totalScore;
                 }
                 await batch.commit();
 
@@ -755,7 +774,7 @@ const AdminDashboard = () => {
     };
 
     // Removed ManageJudges component entirely
-    // const ManageJudges = () => { ... };
+    // const ManageJudges = () => { /* ... existing code ... */ };
 
     const ManageParticipants = () => {
         const [participantName, setParticipantName] = useState('');
@@ -1145,7 +1164,7 @@ const AdminDashboard = () => {
                                                                         className="btn btn-danger btn-small"
                                                                         onClick={() => handleDeleteParticipantEvent(participant.id, eventId, participant.name, eventName)}
                                                                     >
-                                                                        Delete
+                                                                        Delete Event
                                                                     </button>
                                                                 </td>
                                                             </tr>
@@ -1202,16 +1221,16 @@ const AdminDashboard = () => {
                     setProcessedRankedParticipants(fetchedRanks);
 
                     // Populate currentPlacements for display based on fetched ranks
-                    const newPlacements = { 1: null, 2: null, 3: null };
+                    const newPlacements = { 1: [], 2: [], 3: [] }; // Initialize as arrays
                     fetchedRanks.forEach(p => {
-                        if (p.rank >= 1 && p.rank <= 3) {
-                            newPlacements[p.rank] = {
-                                rank: p.rank,
-                                participantId: p.participantId,
-                                participantName: p.participantName,
-                                pointsAwarded: p.pointsAwarded,
-                                totalJudgeScore: p.participantEventTotalScore
-                            };
+                        // For standard competition ranking, if multiple people have the same rank,
+                        // they all take that rank. We need to ensure we get *all* participants for ranks 1, 2, 3.
+                        if (p.rank === 1) {
+                            newPlacements[1].push(p);
+                        } else if (p.rank === 2) {
+                            newPlacements[2].push(p);
+                        } else if (p.rank === 3) {
+                            newPlacements[3].push(p);
                         }
                     });
                     setCurrentPlacements(newPlacements);
@@ -1230,7 +1249,7 @@ const AdminDashboard = () => {
                 }
             };
             fetchProcessedRanksForDisplay();
-        }, [db, appId, selectedEventId, results]); // Added results to dependency to react to result changes
+        }, [db, appId, selectedEventId, results]);
 
 
         useEffect(() => {
@@ -1269,15 +1288,18 @@ const AdminDashboard = () => {
                 }
 
                 const placementsToSave = [];
+                // Iterate through the currentPlacements (which now correctly holds multiple participants per rank)
                 for (let i = 1; i <= 3; i++) {
-                    const participantWithRank = processedRankedParticipants.find(p => p.rank === i);
-                    if (participantWithRank) {
-                        placementsToSave.push({
-                            rank: i,
-                            participantId: participantWithRank.participantId,
-                            participantName: participantWithRank.participantName,
-                            pointsAwarded: participantWithRank.pointsAwarded,
-                            totalJudgeScore: participantWithRank.participantEventTotalScore
+                    const participantsAtRank = currentPlacements[i];
+                    if (participantsAtRank && participantsAtRank.length > 0) {
+                        participantsAtRank.forEach(p => {
+                            placementsToSave.push({
+                                rank: p.rank,
+                                participantId: p.participantId,
+                                participantName: p.participantName,
+                                pointsAwarded: p.pointsAwarded,
+                                totalJudgeScore: p.totalJudgeScore
+                            });
                         });
                     }
                 }
@@ -1366,12 +1388,25 @@ const AdminDashboard = () => {
                             {processedRankedParticipants.length > 0 ? (
                                 <div className="processed-ranks-display">
                                     {[1, 2, 3].map(rank => {
-                                        const participant = processedRankedParticipants.find(p => p.rank === rank);
+                                        const participantsAtRank = currentPlacements[rank]; // Now directly access array of participants at this rank
+
                                         return (
                                             <div key={rank} className="rank-display-item">
                                                 <strong>{rank} Place:</strong> {' '}
-                                                {participant ? (
-                                                    `${participant.participantName} (${participant.totalScore} marks)`
+                                                {participantsAtRank && participantsAtRank.length > 0 ? (
+                                                    participantsAtRank.map((participant, index) => {
+                                                        const participantDetails = participants.find(p => p.id === participant.participantId);
+                                                        const participantSector = participantDetails ? participantDetails.sector : 'N/A';
+                                                        const displayString = participant.totalScore === 0 ?
+                                                            'Absent' :
+                                                            `${participant.participantName} (${participantSector}) (${participant.totalScore} marks)`;
+                                                        return (
+                                                            <React.Fragment key={`${participant.participantId}-${index}`}>
+                                                                {displayString}
+                                                                {index < participantsAtRank.length - 1 && ', '}
+                                                            </React.Fragment>
+                                                        );
+                                                    })
                                                 ) : (
                                                     <span style={{ color: '#888' }}>Not Awarded</span>
                                                 )}
@@ -1405,11 +1440,25 @@ const AdminDashboard = () => {
                                 <div key={result.id} className="list-card result-list-card">
                                     <p><strong>{result.eventName} ({result.categoryName})</strong></p>
                                     <p>Type: {result.competitionType || 'N/A'}</p>
-                                    {result.placements && result.placements.map(p => (
-                                        <p key={p.rank}>
-                                            <strong>{p.rank} Place:</strong> {p.participantName} ({p.pointsAwarded} pts)
-                                        </p>
-                                    ))}
+                                    {/* Display all placements in a single paragraph for each rank */}
+                                    {[1, 2, 3].map(rank => {
+                                        const participantsAtRank = result.placements.filter(p => p.rank === rank);
+                                        if (participantsAtRank.length === 0) return null; // Don't show if no one at this rank
+
+                                        const displayString = participantsAtRank.map(p => {
+                                            const participantDetails = participants.find(part => part.id === p.participantId);
+                                            const participantSector = participantDetails ? participantDetails.sector : 'N/A';
+                                            return p.pointsAwarded === 0 ?
+                                                'Absent' :
+                                                `${p.participantName} (${participantSector}) (${p.pointsAwarded} pts)`;
+                                        }).join(', '); // Join multiple participants with comma
+
+                                        return (
+                                            <p key={`${result.id}-rank-${rank}`}>
+                                                <strong>{rank} Place:</strong> {displayString}
+                                            </p>
+                                        );
+                                    })}
                                     {result.posterBase64 && (
                                         <img src={result.posterBase64} alt="Result Poster" style={{ maxWidth: '80px', maxHeight: '80px', marginTop: '10px' }} />
                                     )}
@@ -1570,7 +1619,7 @@ const AdminDashboard = () => {
                 <form onSubmit={handleAddStageAdmin} className="form-card">
                     <h4>{editingStageAdminId ? 'Edit Stage Admin' : 'Add New Stage Admin'}</h4>
                     <div className="form-group">
-                        <label>Stage Name (e.g., Stage 1, Stage 2):</label>
+                        <label>Stage Name (e.g., Stage 1, Stage 2, Off Stage):</label>
                         <input type="text" value={stageName} onChange={(e) => setStageName(e.target.value)} required />
                         <small>This will be used to create the login email (e.g., 'Stage 1' will be 'stage1@stage.com').</small>
                     </div>
@@ -1620,8 +1669,8 @@ const AdminDashboard = () => {
         );
     };
 
-    // The ManageSectors component is now removed as per user's request.
-    // const ManageSectors = () => { /* ... existing code ... */ };
+    // Removed ManageJudges component entirely
+    // const ManageJudges = () => { /* ... existing code ... */ };
 
 
     return (
@@ -1635,7 +1684,7 @@ const AdminDashboard = () => {
                 <button className={`tab-button ${activeTab === 'participants' ? 'active' : ''}`} onClick={() => setActiveTab('participants')}>Manage Participants</button>
                 <button className={`tab-button ${activeTab === 'results' ? 'active' : ''}`} onClick={() => setActiveTab('results')}>Manage Results</button>
                 <button className={`tab-button ${activeTab === 'leaderboard' ? 'active' : ''}`} onClick={() => setActiveTab('leaderboard')}>Manage Leaderboard</button>
-                <button className={`tab-button ${activeTab === 'stageAdmins' ? 'active' : ''}`} onClick={() => setActiveTab('stageAdmins')}>Manage Stage Admins</button> {/* New tab */}
+                <button className={`tab-button ${activeTab === 'stageAdmins' ? 'active' : ''}`} onClick={() => setActiveTab('stageAdmins')}>Manage Stage Admins</button>
             </div>
 
             <div className="admin-content">

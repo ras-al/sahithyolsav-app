@@ -136,19 +136,25 @@ const ResultsPage = () => {
                                             <td>{eventDetails.name || 'N/A'}</td>
                                             <td>{eventDetails.competitionType || 'N/A'}</td>
                                             {[1, 2, 3].map(rank => {
-                                                const placement = publishedResult?.placements?.find(p => p.rank === rank);
-                                                const participantDetails = participants.find(p => p.id === placement?.participantId);
-                                                const participantSector = participantDetails ? participantDetails.sector : 'N/A';
+                                                // Use filter to get all placements for the current rank
+                                                const placementsForRank = publishedResult?.placements?.filter(p => p.rank === rank) || [];
 
                                                 return (
                                                     <td key={rank}>
-                                                        {placement ? (
-                                                            // Display "Absent" if pointsAwarded is 0, otherwise display name, sector, and points
-                                                            placement.pointsAwarded === 0 ? (
-                                                                <span className="no-published-text">Absent</span>
-                                                            ) : (
-                                                                `${placement.participantName} (${participantSector}) (${placement.pointsAwarded} pts)`
-                                                            )
+                                                        {placementsForRank.length > 0 ? (
+                                                            placementsForRank.map((placement, index) => {
+                                                                const participantDetails = participants.find(p => p.id === placement.participantId);
+                                                                const participantSector = participantDetails ? participantDetails.sector : 'N/A';
+                                                                const displayString = placement.pointsAwarded === 0 ?
+                                                                    'Absent' :
+                                                                    `${placement.participantName} (${participantSector}) (${placement.pointsAwarded} pts)`;
+                                                                return (
+                                                                    <React.Fragment key={index}>
+                                                                        {displayString}
+                                                                        {index < placementsForRank.length - 1 && ', '} {/* Add comma for multiple participants */}
+                                                                    </React.Fragment>
+                                                                );
+                                                            })
                                                         ) : (
                                                             <span className="no-published-text">No Published</span>
                                                         )}
