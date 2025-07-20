@@ -19,6 +19,7 @@ const LiveEvents = () => {
         }
 
         // Fetch all participants to easily look up names and playing status
+        // This listener needs to be comprehensive to capture all participant data, including their events array
         const unsubscribeParticipants = onSnapshot(collection(db, `artifacts/${appId}/public/data/participants`), (snapshot) => {
             setAllParticipants(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         }, (err) => {
@@ -129,9 +130,15 @@ const LiveEvents = () => {
                                         <div className="playing-participants">
                                             <strong>Playing:</strong>
                                             <ul>
-                                                {playingParticipants.map(p => (
-                                                    <li key={p.id} className="playing-participant-code">{p.code || 'N/A'}</li>
-                                                ))}
+                                                {playingParticipants.map(p => {
+                                                    const eventEntry = p.events.find(e => e.eventId === event.id);
+                                                    const participantCode = eventEntry ? eventEntry.code : 'N/A';
+                                                    return (
+                                                        <li key={p.id} className="playing-participant-code">
+                                                            {participantCode}
+                                                        </li>
+                                                    );
+                                                })}
                                             </ul>
                                         </div>
                                     )}
