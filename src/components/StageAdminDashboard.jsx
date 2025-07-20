@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext.jsx'; // Correct path to AuthContext
 import { MessageBox, LoadingSpinner, Modal } from './UtilityComponents.jsx'; // Import utility components and Modal
-import { collection, onSnapshot, query, where, updateDoc, doc, getDocs, writeBatch, addDoc } from 'firebase/firestore'; // Import writeBatch and addDoc
+import { collection, onSnapshot, query, where, updateDoc, doc, getDocs,getDoc, writeBatch, addDoc } from 'firebase/firestore'; // Import writeBatch and addDoc
 
 const StageAdminDashboard = () => {
     const { currentUser, db, appId, loadingAuth, stageDetails } = useAuth();
