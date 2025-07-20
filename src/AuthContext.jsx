@@ -24,7 +24,7 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 
 // Predefined event categories for the application
-const EVENT_CATEGORIES = ["LP", "UP", "HS", "HSS", "Junior", "Senior", "General", "Campus", "Campus Girls Parallel"];
+const EVENT_CATEGORIES = ["Kids", "LP", "UP", "HS", "HSS", "Junior", "Campus", "Senior", "General", "Campus Girls"];
 
 // Authentication Context
 export const AuthContext = createContext(null);
@@ -47,9 +47,6 @@ export function AuthProvider({ children }) {
                 if (user.email === 'admin@sahithyolsav.com') {
                     role = 'admin';
                     setStageDetails(null); // Admin doesn't have stage details
-                } else if (user.email && user.email.includes('@judge.com')) {
-                    role = 'judge';
-                    setStageDetails(null); // Judges don't have stage details
                 } else if (user.email && user.email.includes('@stage.com')) { // New stage admin role
                     role = 'stage_admin';
                     const stageDocRef = doc(db, `artifacts/${appId}/public/data/stage_admins`, user.uid);
@@ -61,6 +58,7 @@ export function AuthProvider({ children }) {
                         console.warn(`Stage admin details not found for UID: ${user.uid}`);
                     }
                 }
+                // Removed 'judge' role assignment
                 setUserRole(role);
             } else {
                 setCurrentUser(null);

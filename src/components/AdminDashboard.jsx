@@ -25,7 +25,7 @@ const AdminDashboard = () => {
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('events'); // Default active tab
     const [message, setMessage] = useState('');
-    const [judges, setJudges] = useState([]);
+    // const [judges, setJudges] = useState([]); // Removed: No longer managing judges
     const [events, setEvents] = useState([]);
     const [participants, setParticipants] = useState([]);
     const [sectors, setSectors] = useState([]);
@@ -42,9 +42,10 @@ const AdminDashboard = () => {
     useEffect(() => {
         if (!db) return;
 
-        const unsubscribeJudges = onSnapshot(collection(db, `artifacts/${appId}/public/data/judges`), (snapshot) => {
-            setJudges(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        }, (error) => console.error("Error fetching judges:", error));
+        // Removed: Unsubscribe Judges
+        // const unsubscribeJudges = onSnapshot(collection(db, `artifacts/${appId}/public/data/judges`), (snapshot) => {
+        //     setJudges(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        // }, (error) => console.error("Error fetching judges:", error));
 
         const unsubscribeEvents = onSnapshot(collection(db, `artifacts/${appId}/public/data/events`), (snapshot) => {
             setEvents(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -65,7 +66,7 @@ const AdminDashboard = () => {
 
 
         return () => {
-            unsubscribeJudges();
+            // unsubscribeJudges(); // Removed
             unsubscribeEvents();
             unsubscribeParticipants();
             unsubscribeSectors();
@@ -124,14 +125,21 @@ const AdminDashboard = () => {
         const [eventCategory, setEventCategory] = useState(EVENT_CATEGORIES[0]);
         const [competitionType, setCompetitionType] = useState('single');
         const [totalMarks, setTotalMarks] = useState(100);
-        const [selectedJudgeIds, setSelectedJudgeIds] = useState([]);
-        const [judgeMarkDistribution, setJudgeMarkDistribution] = useState({});
+        // const [selectedJudgeIds, setSelectedJudgeIds] = useState([]); // Removed: No longer assigning judges
+        // const [judgeMarkDistribution, setJudgeMarkDistribution] = useState({}); // Removed: No longer managing judge distribution
         const [isViewScoresModalOpen, setIsViewScoresModalOpen] = useState(false);
         const [scoresForEvent, setScoresForEvent] = useState([]);
         const [selectedEventForScores, setSelectedEventForScores] = useState(null);
         const [editingEventId, setEditingEventId] = useState(null);
         const [isPublic, setIsPublic] = useState(false); // New state for public visibility
         const [eventSearchTerm, setEventSearchTerm] = useState(''); // New state for event search
+
+        // State for Admin Marking Modal
+        const [isAdminMarkingModalOpen, setIsAdminMarkingModalOpen] = useState(false);
+        const [eventToMark, setEventToMark] = useState(null);
+        const [participantsToMark, setParticipantsToMark] = useState([]); // Participants for the current event being marked
+        const [adminMarks, setAdminMarks] = useState({}); // { participantId: mark }
+
 
         // State for Reset Event Modal
         const [isResetModalOpen, setIsResetModalOpen] = useState(false);
@@ -145,19 +153,18 @@ const AdminDashboard = () => {
             e.preventDefault();
             setMessage('');
 
-            if (selectedJudgeIds.length > 3) {
-                setMessage("An event can have a maximum of 3 judges.");
-                return;
-            }
-
-            const currentJudges = judges.filter(j => selectedJudgeIds.includes(j.id));
-            const judgesWithNames = currentJudges.map(j => ({ id: j.id, name: j.name }));
-
-            const distributedSum = Object.values(judgeMarkDistribution).reduce((sum, val) => sum + (parseInt(val) || 0), 0);
-            if (distributedSum !== parseInt(totalMarks)) {
-                setMessage("Sum of judge marks must equal total marks for the event.");
-                return;
-            }
+            // Removed judge assignment validation
+            // if (selectedJudgeIds.length > 3) {
+            //     setMessage("An event can have a maximum of 3 judges.");
+            //     return;
+            // }
+            // const currentJudges = judges.filter(j => selectedJudgeIds.includes(j.id));
+            // const judgesWithNames = currentJudges.map(j => ({ id: j.id, name: j.name }));
+            // const distributedSum = Object.values(judgeMarkDistribution).reduce((sum, val) => sum + (parseInt(val) || 0), 0);
+            // if (distributedSum !== parseInt(totalMarks)) {
+            //     setMessage("Sum of judge marks must equal total marks for the event.");
+            //     return;
+            // }
 
             // Validation for stage number if on-stage
             if (eventStageType === 'on-stage' && !eventStageNumber.trim()) {
@@ -177,8 +184,8 @@ const AdminDashboard = () => {
                     category: eventCategory,
                     competitionType: competitionType,
                     totalMarks: parseInt(totalMarks),
-                    judges: judgesWithNames,
-                    markDistribution: judgeMarkDistribution,
+                    // judges: judgesWithNames, // Removed: No longer assigning judges
+                    // markDistribution: judgeMarkDistribution, // Removed: No longer managing judge distribution
                     status: 'scheduled', // Default status for new events
                     isPublic: isPublic // Save public visibility status
                 };
@@ -202,8 +209,8 @@ const AdminDashboard = () => {
                 setEventCategory(EVENT_CATEGORIES[0]);
                 setCompetitionType('single');
                 setTotalMarks(100);
-                setSelectedJudgeIds([]);
-                setJudgeMarkDistribution({});
+                // setSelectedJudgeIds([]); // Removed
+                // setJudgeMarkDistribution({}); // Removed
                 setIsPublic(false); // Reset public visibility
             } catch (error) {
                 console.error("Error adding/updating event:", error);
@@ -223,28 +230,14 @@ const AdminDashboard = () => {
             setEventCategory(event.category);
             setCompetitionType(event.competitionType || 'single');
             setTotalMarks(event.totalMarks);
-            setSelectedJudgeIds(event.judges?.map(j => j.id) || []);
-            setJudgeMarkDistribution(event.markDistribution || {});
+            // setSelectedJudgeIds(event.judges?.map(j => j.id) || []); // Removed
+            // setJudgeMarkDistribution(event.markDistribution || {}); // Removed
             setIsPublic(event.isPublic || false); // Set public visibility for editing
         };
 
-        const handleJudgeSelection = (e) => {
-            const options = Array.from(e.target.selectedOptions).map(option => option.value);
-            setSelectedJudgeIds(options);
-
-            const newDistribution = {};
-            options.forEach(id => {
-                newDistribution[id] = judgeMarkDistribution[id] || 0;
-            });
-            setJudgeMarkDistribution(newDistribution);
-        };
-
-        const handleMarkDistributionChange = (judgeId, value) => {
-            setJudgeMarkDistribution(prev => ({
-                ...prev,
-                [judgeId]: parseInt(value) || 0
-            }));
-        };
+        // Removed handleJudgeSelection and handleMarkDistributionChange as judges are no longer assigned here
+        // const handleJudgeSelection = (e) => { ... };
+        // const handleMarkDistributionChange = (judgeId, value) => { ... };
 
         // New function to set event status to 'scheduled'
         const handleSetEventToScheduled = async (eventId) => {
@@ -285,43 +278,120 @@ const AdminDashboard = () => {
             }
         };
 
-        const handleViewJudgeScores = async (event) => {
+        // Modified handleViewJudgeScores to handle admin direct marking
+        const handleOpenAdminMarkingModal = async (event) => {
             setMessage('');
+            setEventToMark(event);
+            setIsAdminMarkingModalOpen(true);
+            setAdminMarks({}); // Clear previous marks
+
             try {
-                const scoresQuery = query(
+                // Fetch participants relevant to this event
+                const participantsColRef = collection(db, `artifacts/${appId}/public/data/participants`);
+                const allParticipantsSnap = await getDocs(participantsColRef);
+                const allParticipantsData = allParticipantsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                const relevantParticipants = allParticipantsData.filter(p =>
+                    p.events && p.events.some(e => e.eventId === event.id)
+                ).map(p => {
+                    const eventEntry = p.events.find(e => e.eventId === event.id);
+                    return {
+                        id: p.id,
+                        name: p.name,
+                        code: eventEntry.code || 'N/A',
+                        originalEvents: p.events // Keep original for updating
+                    };
+                }).sort((a, b) => a.name.localeCompare(b.name));
+
+                setParticipantsToMark(relevantParticipants);
+
+                // Fetch existing marks for this event (if any)
+                const existingMarksQuery = query(
                     collection(db, `artifacts/${appId}/public/data/scores`),
                     where('eventId', '==', event.id)
                 );
-                const scoresSnapshot = await getDocs(scoresQuery);
-                const fetchedScores = scoresSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-                // Process scores to get only the latest submission per participant per judge
-                const latestScores = {};
-                fetchedScores.forEach(score => {
-                    const key = `${score.participantId}-${score.judgeId}`;
-                    if (!latestScores[key] || new Date(score.timestamp) > new Date(latestScores[key].timestamp)) {
-                        latestScores[key] = score;
-                    }
+                const existingMarksSnapshot = await getDocs(existingMarksQuery);
+                const existingMarksData = {};
+                existingMarksSnapshot.docs.forEach(doc => {
+                    const data = doc.data();
+                    // Assuming one score per participant from Admin
+                    existingMarksData[data.participantId] = data.marks;
                 });
+                setAdminMarks(existingMarksData);
 
-                const enrichedScores = Object.values(latestScores).map(score => {
-                    const participant = participants.find(p => p.id === score.participantId);
-                    const judge = judges.find(j => j.id === score.judgeId);
-                    return {
-                        ...score,
-                        participantName: participant ? participant.name : 'Unknown Participant',
-                        judgeName: judge ? judge.name : 'Unknown Judge'
-                    };
-                });
-
-                setScoresForEvent(enrichedScores);
-                setSelectedEventForScores(event);
-                setIsViewScoresModalOpen(true);
             } catch (error) {
-                console.error("Error fetching judge scores for event:", error);
-                setMessage("Failed to fetch judge scores: " + error.message);
+                console.error("Error opening marking modal:", error);
+                setMessage("Failed to load participants for marking: " + error.message);
+                setIsAdminMarkingModalOpen(false);
             }
         };
+
+        const handleAdminMarkChange = (participantId, mark) => {
+            setAdminMarks(prev => ({
+                ...prev,
+                [participantId]: parseInt(mark) || 0
+            }));
+        };
+
+        const handleSubmitAdminMarks = async () => {
+            setMessage('');
+            if (!eventToMark) {
+                setResetMessage("No event selected for marking.");
+                return;
+            }
+
+            const batch = writeBatch(db);
+            let marksSubmittedCount = 0;
+
+            for (const participant of participantsToMark) {
+                const mark = adminMarks[participant.id];
+                if (mark === undefined || mark === null || isNaN(mark)) {
+                    // Skip if no mark entered, or handle as 0
+                    continue;
+                }
+
+                // Check if a score already exists for this participant in this event (from admin)
+                const existingScoreQuery = query(
+                    collection(db, `artifacts/${appId}/public/data/scores`),
+                    where('eventId', '==', eventToMark.id),
+                    where('participantId', '==', participant.id),
+                    where('judgeId', '==', 'admin') // Mark as submitted by admin
+                );
+                const existingScoreSnapshot = await getDocs(existingScoreQuery);
+
+                const scoreData = {
+                    eventId: eventToMark.id,
+                    eventName: eventToMark.name,
+                    participantId: participant.id,
+                    participantName: participant.name,
+                    judgeId: 'admin', // Mark as submitted by admin
+                    judgeName: 'Admin', // Admin's name for score record
+                    marks: mark,
+                    timestamp: new Date().toISOString()
+                };
+
+                if (existingScoreSnapshot.empty) {
+                    await addDoc(collection(db, `artifacts/${appId}/public/data/scores`), scoreData);
+                } else {
+                    const scoreDocRef = doc(db, `artifacts/${appId}/public/data/scores`, existingScoreSnapshot.docs[0].id);
+                    await updateDoc(scoreDocRef, scoreData);
+                }
+                marksSubmittedCount++;
+            }
+
+            try {
+                await batch.commit();
+                setMessage(`Marks submitted for ${marksSubmittedCount} participants in ${eventToMark.name}!`);
+                setIsAdminMarkingModalOpen(false);
+                setEventToMark(null);
+                setParticipantsToMark([]);
+                setAdminMarks({});
+            } catch (error) {
+                console.error("Error submitting admin marks:", error);
+                setMessage("Failed to submit marks: " + error.message);
+            }
+        };
+
 
         const handleProcessEventRanks = async (event) => {
             setMessage('');
@@ -334,32 +404,19 @@ const AdminDashboard = () => {
                     return;
                 }
 
-                // Correctly define scoresQuery here
+                // Fetch scores submitted by admin for this event
                 const scoresQuery = query(
                     collection(db, `artifacts/${appId}/public/data/scores`),
-                    where('eventId', '==', event.id)
+                    where('eventId', '==', event.id),
+                    where('judgeId', '==', 'admin') // Only consider marks from admin
                 );
                 const scoresSnapshot = await getDocs(scoresQuery);
                 const scoresData = scoresSnapshot.docs.map(doc => doc.data());
 
-                // Process scores to get only the latest submission per participant per judge
-                const latestScoresForRanking = {};
-                scoresData.forEach(score => {
-                    const key = `${score.participantId}-${score.judgeId}`;
-                    if (!latestScoresForRanking[key] || new Date(score.timestamp) > new Date(latestScoresForRanking[key].timestamp)) {
-                        latestScoresForRanking[key] = score;
-                    }
-                });
-                const processedScores = Object.values(latestScoresForRanking);
-
-
                 const participantTotalScores = {};
-                processedScores.forEach(score => {
-                    if (participantTotalScores[score.participantId]) {
-                        participantTotalScores[score.participantId] += score.marks;
-                    } else {
-                        participantTotalScores[score.participantId] = score.marks;
-                    }
+                scoresData.forEach(score => {
+                    // Since admin directly assigns total marks, no need for averaging multiple judges
+                    participantTotalScores[score.participantId] = score.marks;
                 });
 
                 const rankedParticipants = Object.entries(participantTotalScores)
@@ -410,6 +467,9 @@ const AdminDashboard = () => {
                 setMessage("Failed to process event ranks: " + error.message);
             }
         };
+
+        // Removed handleDownloadPoster as it's replaced by Reset Event
+        // const handleDownloadPoster = (base64Data, eventName) => { ... };
 
         const handleOpenResetModal = (eventId, eventName) => {
             setResetEventId(eventId);
@@ -569,35 +629,7 @@ const AdminDashboard = () => {
                         <label>Total Marks:</label>
                         <input type="number" value={totalMarks} onChange={(e) => setTotalMarks(e.target.value)} min="1" required />
                     </div>
-                    <div className="form-group">
-                        <label>Assign Judges (Max 3):</label>
-                        <select multiple value={selectedJudgeIds} onChange={handleJudgeSelection} className="multi-select">
-                            {judges.map(judge => (
-                                <option key={judge.id} value={judge.id}>{judge.name} ({judge.email})</option>
-                            ))}
-                        </select>
-                        <small>Hold Ctrl/Cmd to select multiple.</small>
-                    </div>
-                    {selectedJudgeIds.length > 0 && (
-                        <div className="form-group judge-mark-distribution">
-                            <label>Mark Distribution per Judge:</label>
-                            {selectedJudgeIds.map(judgeId => {
-                                const judge = judges.find(j => j.id === judgeId);
-                                return (
-                                    <div key={judgeId} className="judge-mark-input">
-                                        <span>{judge?.name || 'Unknown Judge'}:</span>
-                                        <input
-                                            type="number"
-                                            value={judgeMarkDistribution[judgeId] || 0}
-                                            onChange={(e) => handleMarkDistributionChange(judgeId, e.target.value)}
-                                            min="0"
-                                            max={totalMarks}
-                                        />
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
+                    {/* Removed Assign Judges and Mark Distribution fields */}
                     <div className="form-group checkbox-group">
                         <input
                             type="checkbox"
@@ -620,8 +652,8 @@ const AdminDashboard = () => {
                         setEventCategory(EVENT_CATEGORIES[0]);
                         setCompetitionType('single');
                         setTotalMarks(100);
-                        setSelectedJudgeIds([]);
-                        setJudgeMarkDistribution({});
+                        // setSelectedJudgeIds([]); // Removed
+                        // setJudgeMarkDistribution({}); // Removed
                         setIsPublic(false); // Reset public visibility
                     }}>Cancel Edit</button>}
                 </form>
@@ -651,8 +683,7 @@ const AdminDashboard = () => {
                                             <p>Date: {event.date}, Time: {event.time} {event.endTime ? `- ${event.endTime}` : ''}</p> {/* Display End Time */}
                                             {/* Removed Location display */}
                                             <p>Stage Type: {event.stageType || 'N/A'}, Stage: {event.stage || 'N/A'}, Type: {event.competitionType || 'N/A'}, Total Marks: {event.totalMarks}</p>
-                                            <p>Judges: {event.judges.map(j => j.name).join(', ')}</p>
-                                            <p>Mark Dist: {Object.entries(event.markDistribution || {}).map(([jId, marks]) => `${judges.find(j => j.id === jId)?.name || jId}: ${marks}`).join(', ')}</p>
+                                            {/* Removed Judges and Mark Distribution display */}
                                             <p>Status: <span className={`event-status ${event.status}`}>{event.status}</span></p>
                                             <p>Public: <span className={`event-status ${event.isPublic ? 'live' : 'over'}`}>{event.isPublic ? 'Yes' : 'No'}</span></p>
                                             <div className="card-actions">
@@ -684,10 +715,10 @@ const AdminDashboard = () => {
                                                     Delete
                                                 </button>
                                                 <button
-                                                    className="btn btn-secondary"
-                                                    onClick={() => handleViewJudgeScores(event)}
+                                                    className="btn btn-primary"
+                                                    onClick={() => handleOpenAdminMarkingModal(event)} // New button to open marking modal
                                                 >
-                                                    View Judge Scores
+                                                    Add/Edit Marks
                                                 </button>
                                                 <button
                                                     className="btn btn-primary"
@@ -712,36 +743,36 @@ const AdminDashboard = () => {
                     )}
                 </div>
 
+                {/* Admin Marking Modal */}
                 <Modal
-                    isOpen={isViewScoresModalOpen}
-                    onClose={() => setIsViewScoresModalOpen(false)}
-                    title={`Judge Scores for ${selectedEventForScores?.name || ''}`}
+                    isOpen={isAdminMarkingModalOpen}
+                    onClose={() => setIsAdminMarkingModalOpen(false)}
+                    title={`Marking for ${eventToMark?.name || ''}`}
                 >
-                    {scoresForEvent.length === 0 ? (
-                        <p>No judge scores submitted for this event yet.</p>
+                    {participantsToMark.length === 0 ? (
+                        <p>No participants found for this event.</p>
                     ) : (
-                        <table className="modal-table">
-                            <thead>
-                                <tr>
-                                    <th>Participant</th>
-                                    <th>Judge</th>
-                                    <th>Marks</th>
-                                    <th>Timestamp</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {scoresForEvent.map(score => (
-                                    <tr key={score.id}>
-                                        <td>{score.participantName}</td>
-                                        <td>{score.judgeName}</td>
-                                        <td>{score.marks}</td> {/* Display marks */}
-                                        <td>{new Date(score.timestamp).toLocaleString()}</td>
-                                    </tr>
+                        <>
+                            <p>Enter marks (out of {eventToMark?.totalMarks || 100}) for each participant.</p>
+                            <div className="admin-marking-list">
+                                {participantsToMark.map(participant => (
+                                    <div key={participant.id} className="admin-marking-item form-group">
+                                        <label>{participant.name} ({participant.code}):</label>
+                                        <input
+                                            type="number"
+                                            value={adminMarks[participant.id] !== undefined ? adminMarks[participant.id] : ''}
+                                            onChange={(e) => handleAdminMarkChange(participant.id, e.target.value)}
+                                            min="0"
+                                            max={eventToMark?.totalMarks || 100}
+                                        />
+                                    </div>
                                 ))}
-                            </tbody>
-                        </table>
+                            </div>
+                            <button className="btn btn-primary" onClick={handleSubmitAdminMarks}>Submit Marks</button>
+                        </>
                     )}
                 </Modal>
+
 
                 {/* Reset Event Confirmation Modal */}
                 <Modal
@@ -778,127 +809,8 @@ const AdminDashboard = () => {
         );
     };
 
-    const ManageJudges = () => {
-        const [judgeName, setJudgeName] = useState('');
-        const [judgeEmail, setJudgeEmail] = useState('');
-        const [judgePassword, setJudgePassword] = useState('');
-        const [editingJudgeId, setEditingJudgeId] = useState(null);
-
-        const handleAddJudge = async (e) => {
-            e.preventDefault();
-            setMessage('');
-            try {
-                if (editingJudgeId) {
-                    await updateDoc(doc(db, `artifacts/${appId}/public/data/judges`, editingJudgeId), {
-                        name: judgeName,
-                        email: judgeEmail,
-                    });
-                    setMessage(`Judge ${judgeName} updated successfully.`);
-                    setEditingJudgeId(null);
-                } else {
-                    // Corrected: Call createUserWithEmailAndPassword as a method of 'auth'
-                    const userCredential = await createUserWithEmailAndPassword(auth, judgeEmail, judgePassword);
-                    const judgeId = userCredential.user.uid;
-
-                    await setDoc(doc(db, `artifacts/${appId}/public/data/judges`, judgeId), {
-                        name: judgeName,
-                        email: judgeEmail,
-                    });
-                    setMessage(`Judge ${judgeName} added successfully with email: ${judgeEmail}. Password is NOT stored.`);
-                }
-                setJudgeName('');
-                setJudgeEmail('');
-                setJudgePassword('');
-            } catch (error) {
-                console.error("Error adding/updating judge:", error);
-                let errorMessage = "Failed to add/update judge: " + error.message;
-                if (error.code === 'auth/email-already-in-use') {
-                    errorMessage = `Failed to add judge: An account with email ${judgeEmail} already exists.`;
-                }
-                setMessage(errorMessage);
-            }
-        };
-
-        const handleEditJudge = (judge) => {
-            setEditingJudgeId(judge.id);
-            setJudgeName(judge.name);
-            setJudgeEmail(judge.email);
-            setJudgePassword('');
-        };
-
-        const handleDeleteJudge = async (judgeId, judgeEmailToDelete) => {
-            if (!window.confirm(`Are you sure you want to delete judge ${judgeEmailToDelete}? This will remove them from the system.`)) {
-                return;
-            }
-            setMessage('');
-            try {
-                await deleteDoc(doc(db, `artifacts/${appId}/public/data/judges`, judgeId));
-                setMessage(`Judge ${judgeEmailToDelete} deleted from database. Remember to manually delete their user from Firebase Authentication if needed.`);
-            } catch (error) {
-                console.error("Error deleting judge:", error);
-                setMessage("Failed to delete judge: " + error.message);
-            }
-        };
-
-        return (
-            <div className="admin-section">
-                <h3>Manage Judges</h3>
-                <form onSubmit={handleAddJudge} className="form-card">
-                    <h4>{editingJudgeId ? 'Edit Judge' : 'Add New Judge'}</h4>
-                    <div className="form-group">
-                        <label>Judge Name:</label>
-                        <input type="text" value={judgeName} onChange={(e) => setJudgeName(e.target.value)} required />
-                    </div>
-                    <div className="form-group">
-                        <label>Judge Email (Unique ID, e.g., judge1@judge.com):</label>
-                        <input type="email" value={judgeEmail} onChange={(e) => setJudgeEmail(e.target.value)} required />
-                    </div>
-                    {!editingJudgeId && (
-                        <div className="form-group">
-                            <label>Temporary Password:</label>
-                            <input type="password" value={judgePassword} onChange={(e) => setJudgePassword(e.target.value)} required minLength="6" />
-                            <small>Password must be at least 6 characters.</small>
-                        </div>
-                    )}
-                    <button type="submit" className="btn btn-primary">{editingJudgeId ? 'Update Judge' : 'Add Judge'}</button>
-                    {editingJudgeId && <button type="button" className="btn btn-secondary" onClick={() => {
-                        setEditingJudgeId(null);
-                        setJudgeName('');
-                        setJudgeEmail('');
-                        setJudgePassword('');
-                    }}>Cancel Edit</button>}
-                </form>
-
-                <div className="list-section">
-                    <h4>Current Judges</h4>
-                    {judges.length === 0 ? <p>No judges added yet.</p> : (
-                        <div className="list-cards">
-                            {judges.map(judge => (
-                                <div key={judge.id} className="list-card">
-                                    <p><strong>{judge.name}</strong></p>
-                                    <p>Email: {judge.email}</p>
-                                    <div className="card-actions">
-                                        <button
-                                            className="btn btn-secondary btn-small"
-                                            onClick={() => handleEditJudge(judge)}
-                                        >
-                                            Edit
-                                        </button>
-                                        <button
-                                            className="btn btn-danger btn-small"
-                                            onClick={() => handleDeleteJudge(judge.id, judge.email)}
-                                        >
-                                            Delete
-                                        </button>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            </div>
-        );
-    };
+    // Removed ManageJudges component entirely
+    // const ManageJudges = () => { ... };
 
     const ManageParticipants = () => {
         const [participantName, setParticipantName] = useState('');
@@ -1367,20 +1279,6 @@ const AdminDashboard = () => {
                     const fetchedParticipants = snapshot.docs.map(doc => doc.data());
                     setProcessedRankedParticipants(fetchedParticipants);
 
-                    const newPlacements = { 1: null, 2: null, 3: null };
-                    fetchedParticipants.forEach(p => {
-                        if (p.rank >= 1 && p.rank <= 3) {
-                            newPlacements[p.rank] = {
-                                rank: p.rank,
-                                participantId: p.participantId,
-                                participantName: p.participantName,
-                                pointsAwarded: p.pointsAwarded,
-                                totalJudgeScore: p.participantEventTotalScore
-                            };
-                        }
-                    });
-                    setCurrentPlacements(newPlacements);
-
                     const existingResult = results.find(r => r.eventId === selectedEventId);
                     if (existingResult && existingResult.posterBase64) {
                         setPosterBase64(existingResult.posterBase64);
@@ -1520,16 +1418,19 @@ const AdminDashboard = () => {
                             <label>Processed Ranks for this Event:</label>
                             {processedRankedParticipants.length > 0 ? (
                                 <div className="processed-ranks-display">
-                                    {[1, 2, 3].map(rank => (
-                                        <div key={rank} className="rank-display-item">
-                                            <strong>{rank} Place:</strong> {' '}
-                                            {currentPlacements[rank] ? (
-                                                `${currentPlacements[rank].participantName} (${currentPlacements[rank].pointsAwarded} points, Total Score: ${currentPlacements[rank].totalJudgeScore})`
-                                            ) : (
-                                                <span style={{ color: '#888' }}>Not Awarded</span>
-                                            )}
-                                        </div>
-                                    ))}
+                                    {[1, 2, 3].map(rank => {
+                                        const participant = processedRankedParticipants.find(p => p.rank === rank);
+                                        return (
+                                            <div key={rank} className="rank-display-item">
+                                                <strong>{rank} Place:</strong> {' '}
+                                                {currentPlacements[rank] ? (
+                                                    `${currentPlacements[rank].participantName} (${currentPlacements[rank].pointsAwarded} points, Total Score: ${currentPlacements[rank].totalJudgeScore})`
+                                                ) : (
+                                                    <span style={{ color: '#888' }}>Not Awarded</span>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             ) : (
                                 <p className="warn-message">No processed ranks found for this event. Please go to "Manage Events" and click "Process Event Ranks" for the selected event.</p>
@@ -1671,11 +1572,9 @@ const AdminDashboard = () => {
 
             try {
                 if (editingStageAdminId) {
-                    // For editing, we only allow updating the name. Email and password are not changed here.
-                    // The assignedStage is derived from the email, which is not editable here.
+                    // For editing, we only allow updating the name. Email and assignedStage are not changed here.
                     await updateDoc(doc(db, `artifacts/${appId}/public/data/stage_admins`, editingStageAdminId), {
                         name: stageName, // Update name
-                        // email and assignedStage remain as they are derived from the email
                     });
                     setMessage(`Stage Admin for "${stageName}" updated successfully.`);
                     setEditingStageAdminId(null);
@@ -1791,7 +1690,7 @@ const AdminDashboard = () => {
 
             <div className="admin-tabs">
                 <button className={`tab-button ${activeTab === 'events' ? 'active' : ''}`} onClick={() => setActiveTab('events')}>Manage Events</button>
-                <button className={`tab-button ${activeTab === 'judges' ? 'active' : ''}`} onClick={() => setActiveTab('judges')}>Manage Judges</button>
+                
                 <button className={`tab-button ${activeTab === 'participants' ? 'active' : ''}`} onClick={() => setActiveTab('participants')}>Manage Participants</button>
                 <button className={`tab-button ${activeTab === 'results' ? 'active' : ''}`} onClick={() => setActiveTab('results')}>Manage Results</button>
                 <button className={`tab-button ${activeTab === 'leaderboard' ? 'active' : ''}`} onClick={() => setActiveTab('leaderboard')}>Manage Leaderboard</button>

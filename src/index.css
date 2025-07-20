@@ -445,7 +445,7 @@ p {
 
 .event-status.live {
     background-color: #E6FFEE; /* Keep light green for live */
-    color: #2ecc71;
+    color: green;
     animation: pulse 1s infinite alternate;
 }
 

@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext.jsx'; // Correct path to AuthContext
 import { MessageBox, LoadingSpinner } from './UtilityComponents.jsx'; // Import utility components
-import { collection, onSnapshot, query, where, updateDoc, doc,addDoc,deleteDoc,getDocs, setDoc, getDoc, writeBatch } from 'firebase/firestore'; // Import writeBatch // Import writeBatch
+import { collection, onSnapshot, query, where, updateDoc, doc, getDocs,getDoc, writeBatch } from 'firebase/firestore'; // Import writeBatch
 
 const StageAdminDashboard = () => {
     const { currentUser, db, appId, loadingAuth, stageDetails } = useAuth();
@@ -39,7 +39,7 @@ const StageAdminDashboard = () => {
         const q = query(eventsColRef, where('stage', '==', stageDetails.assignedStage));
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const eventsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            const eventsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
             setAssignedEvents(eventsData);
 
             // If an event is currently selected, update its details in case status changed
@@ -77,6 +77,7 @@ const StageAdminDashboard = () => {
                         id: p.id,
                         name: p.name, // Include name for display
                         code: eventEntry.code || '', // Current code, if any
+                        isPlaying: eventEntry.isPlaying || false, // New: isPlaying status
                         originalEvents: p.events // Keep original events array to update
                     };
                 }).sort((a, b) => a.name.localeCompare(b.name)); // Sort by name for consistent display
@@ -101,6 +102,7 @@ const StageAdminDashboard = () => {
                     id: p.id,
                     name: p.name,
                     code: eventEntry.code || '',
+                    isPlaying: eventEntry.isPlaying || false, // New: isPlaying status
                     originalEvents: p.events
                 };
             }).sort((a, b) => a.name.localeCompare(b.name));
@@ -128,6 +130,13 @@ const StageAdminDashboard = () => {
         setMessage('');
         if (!selectedEventId) {
             setMessage("Please select an event first.");
+            return;
+        }
+
+        // Get the selected event's details to check stageType
+        const eventDetail = assignedEvents.find(e => e.id === selectedEventId);
+        if (eventDetail && eventDetail.stageType === 'off-stage') {
+            setMessage("Code generation is not applicable for 'Off Stage' events.");
             return;
         }
 
@@ -179,6 +188,13 @@ const StageAdminDashboard = () => {
             return;
         }
 
+        // Get the selected event's details to check stageType
+        const eventDetail = assignedEvents.find(e => e.id === selectedEventId);
+        if (eventDetail && eventDetail.stageType === 'off-stage') {
+            setMessage("Code clearing is not applicable for 'Off Stage' events.");
+            return;
+        }
+
         if (!window.confirm("Are you sure you want to clear all assigned codes for this event? This action cannot be undone.")) {
             return;
         }
@@ -224,6 +240,31 @@ const StageAdminDashboard = () => {
         } catch (error) {
             console.error(`Error setting event status to ${status}:`, error);
             setMessage(`Failed to set event status to ${status}: ` + error.message);
+        }
+    };
+
+    // New: Handle toggling "Currently Playing" status for a participant
+    const handleToggleIsPlaying = async (participantId, eventId, currentIsPlaying) => {
+        setMessage('');
+        try {
+            const participantRef = doc(db, `artifacts/${appId}/public/data/participants`, participantId);
+            const participantSnap = await getDoc(participantRef);
+
+            if (!participantSnap.exists()) {
+                setMessage("Participant not found.");
+                return;
+            }
+
+            const currentEvents = participantSnap.data().events || [];
+            const updatedEvents = currentEvents.map(eventEntry =>
+                eventEntry.eventId === eventId ? { ...eventEntry, isPlaying: !currentIsPlaying } : eventEntry
+            );
+
+            await updateDoc(participantRef, { events: updatedEvents });
+            setMessage(`Participant playing status for ${participantId} updated!`);
+        } catch (error) {
+            console.error("Error updating playing status:", error);
+            setMessage("Failed to update playing status: " + error.message);
         }
     };
 
@@ -302,20 +343,20 @@ const StageAdminDashboard = () => {
                             <button
                                 className="btn btn-primary"
                                 onClick={handleGenerateParticipantCodes}
-                                disabled={!currentEventDetails || (currentEventDetails.status !== 'scheduled' && currentEventDetails.status !== 'live')}
+                                disabled={currentEventDetails.stageType === 'off-stage' || (currentEventDetails.status !== 'scheduled' && currentEventDetails.status !== 'live')}
                             >
                                 Generate Codes
                             </button>
                             <button
                                 className="btn btn-secondary"
                                 onClick={handleClearParticipantCodes}
-                                disabled={!currentEventDetails || participantsForSelectedEvent.filter(p => p.code).length === 0}
+                                disabled={currentEventDetails.stageType === 'off-stage' || participantsForSelectedEvent.filter(p => p.code).length === 0}
                             >
                                 Clear Codes
                             </button>
                         </div>
                         <small className="warn-message" style={{ display: 'block', marginTop: '10px' }}>
-                            Codes can only be generated for 'Scheduled' or 'Live' events. Clearing is always possible.
+                            Codes can only be generated/cleared for 'On Stage' events that are 'Scheduled' or 'Live'.
                         </small>
                     </div>
 
@@ -325,6 +366,7 @@ const StageAdminDashboard = () => {
                                 <tr>
                                     <th>Participant Name</th>
                                     <th>Current Code</th>
+                                    <th>Playing Now</th> {/* New column header */}
                                 </tr>
                             </thead>
                             <tbody>
@@ -337,7 +379,15 @@ const StageAdminDashboard = () => {
                                                 value={participant.code || 'N/A'}
                                                 disabled
                                                 className="disabled-input"
-                                                style={{ width: '120px', textTransform: 'uppercase', textAlign: 'center' }}
+                                                style={{ width: '60px', textTransform: 'uppercase', textAlign: 'center' }}
+                                            />
+                                        </td>
+                                        <td> {/* New column for playing status */}
+                                            <input
+                                                type="checkbox"
+                                                checked={participant.isPlaying}
+                                                onChange={() => handleToggleIsPlaying(participant.id, selectedEventId, participant.isPlaying)}
+                                                disabled={currentEventDetails.status !== 'live'} // Only allow changing if event is live
                                             />
                                         </td>
                                     </tr>

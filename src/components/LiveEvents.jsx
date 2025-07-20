@@ -1,4 +1,4 @@
-// Path: src/pages/LiveEvents.jsx
+// Path: src/components/LiveEvents.jsx
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../AuthContext.jsx';
@@ -7,6 +7,7 @@ import { collection, query, where, onSnapshot } from 'firebase/firestore';
 const LiveEvents = () => {
     const { db, appId } = useAuth();
     const [liveEventsByStage, setLiveEventsByStage] = useState({});
+    const [allParticipants, setAllParticipants] = useState([]); // To fetch all participants for lookup
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
@@ -17,6 +18,14 @@ const LiveEvents = () => {
             return;
         }
 
+        // Fetch all participants to easily look up names and playing status
+        const unsubscribeParticipants = onSnapshot(collection(db, `artifacts/${appId}/public/data/participants`), (snapshot) => {
+            setAllParticipants(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        }, (err) => {
+            console.error("Error fetching all participants:", err);
+            setError("Failed to load participant data.");
+        });
+
         const eventsRef = collection(db, `artifacts/${appId}/public/data/events`);
         // Query for events that are 'live' and 'isPublic'
         const q = query(
@@ -25,7 +34,7 @@ const LiveEvents = () => {
             where('isPublic', '==', true)
         );
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
+        const unsubscribeEvents = onSnapshot(q, (snapshot) => {
             const fetchedEvents = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
@@ -68,8 +77,20 @@ const LiveEvents = () => {
             setLoading(false);
         });
 
-        return () => unsubscribe(); // Cleanup listener on component unmount
+        return () => {
+            unsubscribeParticipants(); // Cleanup participant listener
+            unsubscribeEvents(); // Cleanup event listener
+        };
     }, [db, appId]);
+
+    // Helper to convert 24-hour time to 12-hour AM/PM format
+    const formatTime = (time24) => {
+        if (!time24) return 'N/A';
+        const [hours, minutes] = time24.split(':');
+        const date = new Date();
+        date.setHours(parseInt(hours), parseInt(minutes));
+        return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+    };
 
     if (loading) {
         return <div className="page-container">Loading live events...</div>;
@@ -85,26 +106,41 @@ const LiveEvents = () => {
         <div className="page-container live-events-page">
             <h2>Live Events Happening Now!</h2>
             {!hasLiveEvents && (
-                <p>No events are currently live. Please check back later!</p>
+                <p className="no-live-events">No events are currently live. Please check back later!</p>
             )}
 
             {Object.entries(liveEventsByStage).map(([stage, events]) => (
                 <div key={stage} className="live-stage-section">
                     <h3>{stage}</h3>
                     <div className="event-cards-container">
-                        {events.map(event => (
-                            <div key={event.id} className="event-card live-event-card">
-                                <h4>{event.name}</h4>
-                                <p>Category: {event.category}</p>
-                                <p>Time: {event.time}</p>
-                                {/* Display date if needed, but for "live now", time is more relevant */}
-                                {/* <p>Date: {event.date}</p> */}
-                                {event.posterBase64 && (
-                                    <img src={event.posterBase64} alt={`${event.name} poster`} className="event-poster-thumbnail" />
-                                )}
-                                {/* You can add more details like current participants if that data is live-updated and relevant */}
-                            </div>
-                        ))}
+                        {events.map(event => {
+                            // Filter participants who are playing in this specific event
+                            const playingParticipants = allParticipants.filter(p =>
+                                p.events && p.events.some(e => e.eventId === event.id && e.isPlaying)
+                            );
+
+                            return (
+                                <div key={event.id} className="event-card live-event-card">
+                                    <h4>{event.name}</h4>
+                                    <p>Category: {event.category}</p>
+                                    <p>Time: {formatTime(event.time)} {event.endTime ? `- ${formatTime(event.endTime)}` : ''}</p>
+                                    <p>Stage: {event.stage}</p>
+                                    {playingParticipants.length > 0 && (
+                                        <div className="playing-participants">
+                                            <strong>Playing:</strong>
+                                            <ul>
+                                                {playingParticipants.map(p => (
+                                                    <li key={p.id} className="playing-participant-code">{p.code || 'N/A'}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    )}
+                                    {event.posterBase64 && (
+                                        <img src={event.posterBase64} alt={`${event.name} poster`} className="event-poster-thumbnail" />
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
             ))}

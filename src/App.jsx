@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route } from 'react-router-dom';
-import { AuthProvider } from './AuthContext.jsx';
+import { AuthProvider, useAuth } from './AuthContext.jsx'; // Import useAuth
 import PrivateRoute from './PrivateRoutes.jsx'; // Import PrivateRoute
 
 // Import all components from the src/components directory
@@ -13,9 +13,9 @@ import LeaderboardPage from './components/LeaderboardPage.jsx';
 import InfoPage from './components/InfoPage.jsx';
 import UnifiedLogin from './components/UnifiedLogin.jsx';
 import AdminDashboard from './components/AdminDashboard.jsx';
-import JudgeDashboard from './components/JudgeDashboard.jsx';
+// import JudgeDashboard from './components/JudgeDashboard.jsx'; // Removed: No longer needed
 import StageAdminDashboard from './components/StageAdminDashboard.jsx';
-import LiveEvents from './components/LiveEvents.jsx'; // Import LiveEvents
+import LiveEvents from './components/LiveEvents.jsx';
 import logo from '/logo.png'; // Import the logo image for the splash screen
 
 // This is where you would import your global CSS file
@@ -56,11 +56,12 @@ function App() {
                                 <AdminDashboard />
                             </PrivateRoute>
                         } />
-                        <Route path="/judge" element={
+                        {/* Removed Judge Dashboard Route */}
+                        {/* <Route path="/judge" element={
                             <PrivateRoute allowedRoles={['judge']}>
                                 <JudgeDashboard />
                             </PrivateRoute>
-                        } />
+                        } /> */}
                         <Route path="/stage-admin" element={
                             <PrivateRoute allowedRoles={['stage_admin']}>
                                 <StageAdminDashboard />
