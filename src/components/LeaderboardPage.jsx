@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../AuthContext.jsx'; // Correct path to AuthContext
 import { MessageBox } from './UtilityComponents.jsx'; // Import MessageBox
-import { doc, onSnapshot } from 'firebase/firestore'; // Import Firestore functions
+import { doc, onSnapshot } from 'firebase/firestore'; // Import doc and onSnapshot for fetching single document
 
 const LeaderboardPage = () => {
     const { db, appId, EVENT_CATEGORIES } = useAuth(); // Destructure EVENT_CATEGORIES from useAuth
@@ -64,7 +64,12 @@ const LeaderboardPage = () => {
                         </thead>
                         <tbody>
                             {sortedLeaderboard.map((item, index) => (
-                                <tr key={item.sector} className={index === 0 ? 'top-sector-row' : ''}>
+                                <tr key={item.sector} className={
+                                    index === 0 ? 'top-sector-row' : // 1st place
+                                    index === 1 ? 'second-place-row' : // 2nd place
+                                    index === 2 ? 'third-place-row' : // 3rd place
+                                    ''
+                                }>
                                     <td>#{index + 1}</td>
                                     <td className="sector-name-cell">{item.sector}</td>
                                     <td className="total-score-cell">{item.totalScore}</td>

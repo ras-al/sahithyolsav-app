@@ -362,10 +362,10 @@ const AdminDashboard = () => {
                     .map(([participantId, totalScore]) => ({ participantId, totalScore }))
                     .sort((a, b) => b.totalScore - a.totalScore); // Sort descending by score
 
-                // Calculate ranks with standard competition ranking (1, 2, 2, 3...)
+                // Calculate ranks with standard ranking (1, 2, 2, 3...)
                 const rankedParticipants = [];
                 let currentRank = 1; // Rank to be displayed
-                let previousScore = -1; // Initialize with a score lower than any possible mark
+                let previousScore = -Infinity; // Initialize with a score lower than any possible mark
 
                 for (let i = 0; i < sortedParticipantsByScore.length; i++) {
                     const participant = sortedParticipantsByScore[i];
@@ -393,37 +393,8 @@ const AdminDashboard = () => {
                 const placementsToSave = [];
                 
                 // Collect top 3 distinct ranks for results display
-                // This logic needs to ensure we get ranks 1, 2, and 3 even if there are ties
-                const distinctRanksToCollect = [1, 2, 3];
-                const collectedRanksMap = new Map(); // Map to store participants by their actual rank (1, 2, 3...)
-
-                rankedParticipants.forEach(p => {
-                    if (distinctRanksToCollect.includes(p.rank)) {
-                        if (!collectedRanksMap.has(p.rank)) {
-                            collectedRanksMap.set(p.rank, []);
-                        }
-                        collectedRanksMap.get(p.rank).push(p);
-                    }
-                });
-
-                // Now, iterate through the distinct ranks 1, 2, 3 and add all participants for that rank
-                distinctRanksToCollect.forEach(rank => {
-                    if (collectedRanksMap.has(rank)) {
-                        collectedRanksMap.get(rank).forEach(p => {
-                            const participantDetails = participants.find(pd => pd.id === p.participantId);
-                            placementsToSave.push({
-                                rank: p.rank,
-                                participantId: p.participantId,
-                                participantName: participantDetails ? participantDetails.name : 'Unknown Participant',
-                                pointsAwarded: p.totalScore, // Raw score
-                                totalJudgeScore: p.totalScore
-                            });
-                        });
-                    }
-                });
-                // Sort placementsToSave by rank to ensure 1st, 2nd, 3rd order
-                placementsToSave.sort((a, b) => a.rank - b.rank);
-
+                const distinctRanksToCollect = new Set(); // Use a Set to track distinct ranks already added
+                let distinctRankCount = 0; // Count of distinct ranks added (up to 3)
 
                 for (let i = 0; i < rankedParticipants.length; i++) {
                     const participant = rankedParticipants[i];
@@ -445,6 +416,31 @@ const AdminDashboard = () => {
                         competitionType: competitionTypeKey,
                         timestamp: new Date().toISOString()
                     });
+
+                    // Only save participants for the top 3 distinct ranks for results collection
+                    // This logic ensures all participants with rank 1, 2, or 3 are included,
+                    // even if ties push the numerical rank beyond 3 for subsequent distinct ranks.
+                    if (distinctRankCount < 3) {
+                        if (!distinctRanksToCollect.has(participant.rank)) {
+                            distinctRanksToCollect.add(participant.rank);
+                            distinctRankCount++;
+                        }
+                        placementsToSave.push({
+                            rank: participant.rank,
+                            participantId: participant.participantId,
+                            participantName: participantDetails ? participantDetails.name : 'Unknown Participant',
+                            pointsAwarded: pointsToAward,
+                            totalJudgeScore: participant.totalScore
+                        });
+                    } else if (distinctRanksToCollect.has(participant.rank)) {
+                         placementsToSave.push({
+                            rank: participant.rank,
+                            participantId: participant.participantId,
+                            participantName: participantDetails ? participantDetails.name : 'Unknown Participant',
+                            pointsAwarded: pointsToAward,
+                            totalJudgeScore: participant.totalScore
+                        });
+                    }
                 }
                 await batch.commit();
 
@@ -1221,7 +1217,7 @@ const AdminDashboard = () => {
             const fetchProcessedRanksForDisplay = async () => {
                 if (!db || !selectedEventId) {
                     setProcessedRankedParticipants([]);
-                    setCurrentPlacements({ 1: null, 2: null, 3: null });
+                    setCurrentPlacements({ 1: [], 2: [], 3: [] }); // Initialize as empty arrays
                     setPosterBase64('');
                     return;
                 }
@@ -1237,8 +1233,7 @@ const AdminDashboard = () => {
                     // Populate currentPlacements for display based on fetched ranks
                     const newPlacements = { 1: [], 2: [], 3: [] }; // Initialize as arrays
                     fetchedRanks.forEach(p => {
-                        // For standard competition ranking, if multiple people have the same rank,
-                        // they all take that rank. We need to ensure we get *all* participants for ranks 1, 2, 3.
+                        // Only add participants if their rank is 1, 2, or 3
                         if (p.rank === 1) {
                             newPlacements[1].push(p);
                         } else if (p.rank === 2) {
@@ -1403,13 +1398,12 @@ const AdminDashboard = () => {
                                 <div className="processed-ranks-display">
                                     {/* Iterate from 1 to 3 to display top 3 ranks */}
                                     {[1, 2, 3].map(rank => {
-                                        // Filter to get all participants with the current rank
-                                        const participantsAtRank = processedRankedParticipants.filter(p => p.rank === rank);
+                                        const participantsAtRank = currentPlacements[rank]; // Now directly access array of participants at this rank
 
                                         return (
                                             <div key={rank} className="rank-display-item">
                                                 <strong>{rank} Place:</strong> {' '}
-                                                {participantsAtRank.length > 0 ? (
+                                                {participantsAtRank && participantsAtRank.length > 0 ? (
                                                     // Map over participants at this rank
                                                     participantsAtRank.map((participant, index) => {
                                                         const participantDetails = participants.find(p => p.id === participant.participantId);

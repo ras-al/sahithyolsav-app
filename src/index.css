@@ -30,14 +30,6 @@ h1, h2, h3, h4, h5, h6 {
     font-weight: 700;
 }
 
-h1 {
-    font-size: 2.8em;
-    text-align: center;
-    color: #213B2A; /* Dark green */
-    margin-bottom: 30px;
-    position: relative;
-}
-
 h1::after {
     content: '';
     display: block;
@@ -445,7 +437,7 @@ p {
 
 .event-status.live {
     background-color: #E6FFEE; /* Keep light green for live */
-    color: green;
+    color: #2ecc71;
     animation: pulse 1s infinite alternate;
 }
 
@@ -703,14 +695,12 @@ p {
     animation: highlightRow 2s infinite alternate;
 }
 
-.leaderboard-table .sector-name-cell {
-    font-weight: 700;
-    color: #213B2A; /* Dark green */
+.leaderboard-table .second-place-row {
+    background-color: #E0E0E0; /* Light grey for 2nd place */
 }
 
-.leaderboard-table .total-score-cell {
-    font-size: 1.1em;
-    color: #C0392B; /* Deep red */
+.leaderboard-table .third-place-row {
+    background-color: #F8F5ED; /* Light beige for 3rd place */
 }
 
 @keyframes highlightRow {
@@ -964,12 +954,14 @@ p {
 
 /* Countdown Styles */
 .countdown-container {
-    margin-top: 20px;
+    margin: 20px auto; /* Centered horizontally */
     background-color: rgba(0, 0, 0, 0.4); /* Semi-transparent background */
     padding: 15px 30px;
     border-radius: 10px;
-    display: inline-block; /* To make background fit content */
+    display: block; /* Changed to block for margin auto centering */
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    max-width: fit-content; /* Ensure it only takes content width */
+    text-align: center; /* Center text inside */
 }
 
 .countdown-title {
@@ -1468,64 +1460,5 @@ p {
     .stage-admin-dashboard .participant-table td input[type="text"].disabled-input {
         width: 45px; /* Adjust input width */
         font-size: 0.9em;
-    }
-}
-/* Countdown Styles */
-.countdown-container {
-    margin: 20px auto; /* Centered horizontally */
-    background-color: rgba(0, 0, 0, 0.4); /* Semi-transparent background */
-    padding: 15px 30px;
-    border-radius: 10px;
-    display: block; /* Changed to block for margin auto centering */
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-    max-width: fit-content; /* Ensure it only takes content width */
-    text-align: center; /* Center text inside */
-}
-
-.countdown-title {
-    font-size: 1.5em;
-    color: #F8F5ED; /* Light beige */
-    margin-bottom: 10px;
-    font-weight: 600;
-}
-
-.countdown-timer {
-    display: flex;
-    justify-content: center;
-    gap: 20px;
-}
-
-.countdown-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    color: white;
-    font-size: 2.5em;
-    font-weight: 700;
-    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
-}
-
-.countdown-item span {
-    font-size: 0.5em; /* Label for days, hours etc. */
-    font-weight: 400;
-    text-transform: uppercase;
-    margin-top: 5px;
-}
-@media (max-width: 968px) {
-    .countdown-timer {
-        flex-wrap: wrap; /* Allow items to wrap to the next line */
-        gap: 10px; /* Reduce gap between items */
-        font-size: 0.5em; /* Slightly reduce font size for overall timer */
-    }
-
-    .countdown-item {
-        flex: 1 1 45%; /* Allow items to wrap and take roughly half width, with some flexibility */
-    }
-}
-
-/* For screens up to 480px wide (mobile phones) */
-@media (max-width: 480px) {
-    .countdown-timer {
-        font-size: 0.5em; /* Further reduce font size for very small screens */
     }
 }
